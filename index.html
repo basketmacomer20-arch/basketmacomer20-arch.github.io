@@ -54,7 +54,7 @@ table.ed td.c{text-align:center}
 .tm.a{border-left:6px solid var(--a)} .tm.b{border-right:6px solid var(--b);text-align:right}
 .tm .l1{display:flex;align-items:center;gap:12px}
 .tm.b .l1{flex-direction:row-reverse}
-.tn{font-weight:700;font-size:18px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tn{font-weight:900;font-size:clamp(24px,2.6vw,36px);line-height:1.1;flex:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;text-transform:uppercase}
 .sc{font-size:clamp(72px,8.5vw,128px);font-weight:900;line-height:.9;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .tm .l2{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--mut)}
 .tm.b .l2{justify-content:flex-end}
@@ -150,6 +150,7 @@ table.ed td.c{text-align:center}
   .pl{grid-template-columns:1fr}
   .acts{order:-1}
   .sc{font-size:64px}
+  .tn{font-size:20px}
   .clk{font-size:42px}
 }
 
