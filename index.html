@@ -67,9 +67,17 @@ table.ed td.c{text-align:center}
 .clk{font-size:54px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;padding:4px 18px;border-radius:12px;background:#1f0a0a;color:#fca5a5;cursor:pointer;user-select:none;border:2px solid #7f1d1d;min-width:200px;text-align:center}
 .clk.run{background:#052e16;color:#86efac;border-color:#166534}
 .cbtns{display:flex;gap:4px} .cbtns button{padding:4px 9px;font-size:13px}
-.arrow{display:flex;gap:4px;align-items:center;font-size:12px;color:var(--mut)}
-.arrow button{padding:3px 12px;font-size:18px;line-height:1}
-.arrow button.on.a{background:var(--a)} .arrow button.on.b{background:var(--b)}
+.poss{display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch;width:100%;gap:0;border-radius:12px;overflow:hidden;border:2px solid var(--line);background:#0b1222}
+.poss button{border-radius:0;padding:4px 10px;font-size:46px;font-weight:900;line-height:1;background:transparent;color:#334155;display:flex;align-items:center;justify-content:center}
+.poss button.on.a{background:var(--a);color:#fff} .poss button.on.b{background:var(--b);color:#fff}
+.poss .pl3{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 8px;font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--mut);text-align:center;line-height:1.2}
+.poss .pl3 b{font-size:13px;color:var(--txt);letter-spacing:0;max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.poss.none{border-color:var(--warn)} .poss.none .pl3{color:var(--warn)}
+.sirenbtn{width:100%;padding:10px;font-size:18px;font-weight:900;letter-spacing:.1em;background:#7f1d1d;color:#fecaca;border:2px solid #b91c1c;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
+.sirenbtn.on{background:#ef4444;color:#fff;box-shadow:0 0 24px #ef4444}
+.posstag{font-size:12px;font-weight:900;padding:2px 8px;border-radius:6px;color:#fff;letter-spacing:.05em}
+.tm.a .posstag{background:var(--a)} .tm.b .posstag{background:var(--b)}
+.tm.hasposs.a{box-shadow:inset 0 0 0 2px var(--a)} .tm.hasposs.b{box-shadow:inset 0 0 0 2px var(--b)}
 .pl{flex:1;display:grid;grid-template-columns:1fr minmax(290px,340px) 1fr;gap:10px;padding:10px;min-height:0}
 .roster{overflow:auto;min-height:0}
 .rgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
@@ -228,7 +236,26 @@ function closeModal(){$('#modal').innerHTML='';}
 let confirmCb=null;
 function ask(title,text,okLabel,cb,danger){confirmCb=cb;openModal(`<h3>${esc(title)}</h3><div class="mut">${text}</div><div class="mbtns"><button class="ghost" data-a="closeModal">Annulla</button><button class="${danger?'bad':'pri'}" data-a="confirmOk">${esc(okLabel)}</button></div>`);}
 function download(name,text){const b=new Blob([text],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
-function beep(){try{const C=window.AudioContext||window.webkitAudioContext;const c=new C();const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.value=880;g.gain.value=.25;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+1.2);}catch(e){}}
+/* sirena: suono tipo "buzzer" da palazzetto, finché si tiene premuto */
+let actx=null,siren=null;
+function audio(){if(!actx){const C=window.AudioContext||window.webkitAudioContext;actx=new C();}if(actx.state==='suspended')actx.resume();return actx;}
+function sirenStart(){
+  if(siren)return;
+  try{const c=audio();const out=c.createGain();out.gain.setValueAtTime(0,c.currentTime);out.gain.linearRampToValueAtTime(.55,c.currentTime+.02);
+    const comp=c.createDynamicsCompressor();out.connect(comp);comp.connect(c.destination);
+    const oscs=[[220,'sawtooth'],[277,'sawtooth'],[330,'square'],[440,'sawtooth']].map(([f,t])=>{const o=c.createOscillator();o.type=t;o.frequency.value=f;const g=c.createGain();g.gain.value=.25;o.connect(g);g.connect(out);o.start();return o;});
+    siren={c,out,oscs,t0:c.currentTime};
+    document.querySelectorAll('.sirenbtn').forEach(b=>b.classList.add('on'));
+  }catch(e){}
+}
+function sirenStop(){
+  if(!siren)return;const s=siren;siren=null;
+  const end=Math.max(s.c.currentTime,s.t0+.6);  // durata minima udibile
+  s.out.gain.setValueAtTime(.55,end);s.out.gain.linearRampToValueAtTime(0,end+.06);
+  s.oscs.forEach(o=>o.stop(end+.08));
+  document.querySelectorAll('.sirenbtn').forEach(b=>b.classList.remove('on'));
+}
+function beep(){sirenStart();setTimeout(sirenStop,1600);}
 
 /* =================== VIEW STATE =================== */
 const view={screen:'home',sel:null,teamEdit:null,sheetId:null,pending:null};
@@ -411,8 +438,9 @@ function teamHeader(g,s,ti){
   const t=g.teams[ti];const used=s.to[ti].filter(e=>toSeg(e.period)===toSeg(g.period)).length;const lim=toLimit(g.period);
   let tob='';for(let i=0;i<lim;i++)tob+=`<i class="${i<used?'u':''}"></i>`;
   const tf=curTeamFouls(g,s,ti);
-  return `<div class="tm ${ti?'b':'a'}">
-    <div class="l1"><div class="tn">${esc(t.name)}</div><div class="sc">${s.score[ti]}</div></div>
+  const poss=g.arrow===ti;
+  return `<div class="tm ${ti?'b':'a'} ${poss?'hasposs':''}">
+    <div class="l1"><div class="tn">${esc(t.name)}</div>${poss?`<span class="posstag">${ti?'POSSESSO ▶':'◀ POSSESSO'}</span>`:''}<div class="sc">${s.score[ti]}</div></div>
     <div class="l2"><span>Falli sq. <span class="tfn">${tf}</span></span>${tf>=4?'<span class="bonus">BONUS</span>':''}
       <span>TO <span class="tob">${tob}</span></span>
       <button data-a="timeout" data-t="${ti}">⏸ Timeout</button></div>
@@ -468,7 +496,12 @@ SCREENS.live=()=>{
       <div class="per">${perLong(g.period)}${g.status==='finished'?' · TERMINATA':''}</div>
       <div id="clock" class="clk" data-a="clockToggle" title="Tocca per avviare/fermare (Spazio)">${fmtClock(g.clock)}</div>
       <div class="cbtns"><button data-a="clk" data-d="-10">−10</button><button data-a="clk" data-d="-1">−1</button><button data-a="clk" data-d="1">+1</button><button data-a="clk" data-d="10">+10</button><button data-a="clkEdit">✎</button><button data-a="endPeriod">${endLbl}</button></div>
-      <div class="arrow"><button class="${g.arrow===0?'on a':''}" data-a="arrow" data-t="0">◀</button>possesso alternato<button class="${g.arrow===1?'on b':''}" data-a="arrow" data-t="1">▶</button></div>
+      <div class="poss ${g.arrow==null?'none':''}" title="Freccia del possesso alternato: tocca per invertire">
+        <button class="${g.arrow===0?'on a':''}" data-a="arrow" data-t="0">◀</button>
+        <div class="pl3">POSSESSO${g.arrow==null?'<br>da assegnare':`<b>${esc(g.teams[g.arrow].name)}</b>`}</div>
+        <button class="${g.arrow===1?'on b':''}" data-a="arrow" data-t="1">▶</button>
+      </div>
+      <button class="sirenbtn ${siren?'on':''}" data-siren="1" title="Tieni premuto per suonare (tasto S)">📢 SIRENA</button>
     </div>
     ${teamHeader(g,s,1)}
   </header>
@@ -655,7 +688,7 @@ const ACT={
     if(v.includes(':')){const [m,s2]=v.split(':');sec=(+m)*60+(+s2);}else sec=parseFloat(v.replace(',','.'));
     if(isNaN(sec)||sec<0||sec>perLen(g,g.period)){toast('Valore non valido',true);return;}
     g.clock=sec;save();closeModal();updClock();},
-  arrow:d=>{const g=cur();const t=+d.t;g.arrow=g.arrow===t?null:t;save();render();},
+  arrow:d=>{const g=cur();const t=+d.t;g.arrow=(g.arrow==null)?t:1-g.arrow;save();render();toast(`Possesso alternato: ${g.teams[g.arrow].name}`);},
   endPeriod:()=>{const g=cur();const s=stats(g);
     if(g.period>=4&&s.score[0]!==s.score[1]){ask('Terminare la gara?',`Risultato finale: <b>${esc(g.teams[0].name)} ${s.score[0]} – ${s.score[1]} ${esc(g.teams[1].name)}</b>`,'Fine gara',()=>{g.running=false;g.status='finished';g.endedAt=Date.now();save();view.sheetId=g.id;view.sheetFrom='live';go('sheet');});return;}
     const next=g.period+1;
@@ -724,7 +757,14 @@ document.addEventListener('change',e=>{
     t.players=src.players.slice().sort(numSort).map(p=>({num:p.num,last:p.last,first:p.first,lic:p.lic,sel:!many,starter:false,captain:false}));
     save();render();if(many)toast(`${src.players.length} giocatori: seleziona i 12 a referto`);}
 });
+document.addEventListener('pointerdown',e=>{if(e.target.closest('[data-siren]')){e.preventDefault();sirenStart();}});
+['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,()=>sirenStop()));
+document.addEventListener('pointerleave',e=>{if(e.target.closest&&e.target.closest('[data-siren]'))sirenStop();},true);
+document.addEventListener('contextmenu',e=>{if(e.target.closest('[data-siren]'))e.preventDefault();});
+document.addEventListener('keyup',e=>{if(e.code==='KeyS')sirenStop();});
+window.addEventListener('blur',()=>sirenStop());
 document.addEventListener('keydown',e=>{
+  if(view.screen==='live'&&!$('#modal').innerHTML&&e.code==='KeyS'&&e.target.tagName!=='INPUT'){if(!e.repeat)sirenStart();return;}
   if(view.screen!=='live'||$('#modal').innerHTML) { if(e.key==='Enter'&&$('#clkIn'))ACT.clkSet(); if(e.key==='Escape')closeModal(); return; }
   if(e.target.tagName==='INPUT') return;
   if(e.code==='Space'){e.preventDefault();clockToggle();}
