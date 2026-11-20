@@ -55,7 +55,7 @@ table.ed td.c{text-align:center}
 .tm .l1{display:flex;align-items:center;gap:12px}
 .tm.b .l1{flex-direction:row-reverse}
 .tn{font-weight:700;font-size:18px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sc{font-size:56px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.sc{font-size:clamp(72px,8.5vw,128px);font-weight:900;line-height:.9;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .tm .l2{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--mut)}
 .tm.b .l2{justify-content:flex-end}
 .tob{display:inline-flex;gap:3px} .tob i{width:12px;height:12px;border-radius:3px;border:2px solid var(--mut);display:inline-block} .tob i.u{background:var(--warn);border-color:var(--warn)}
@@ -142,7 +142,7 @@ table.ed td.c{text-align:center}
   .ctr{grid-column:1/3;grid-row:1;min-width:0}
   .pl{grid-template-columns:1fr}
   .acts{order:-1}
-  .sc{font-size:40px}
+  .sc{font-size:64px}
   .clk{font-size:42px}
 }
 
