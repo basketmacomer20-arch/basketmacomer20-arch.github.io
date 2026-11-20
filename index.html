@@ -261,7 +261,7 @@ function sirenStart(){
   if(siren)return;
   try{const c=audio();const out=c.createGain();out.gain.setValueAtTime(0,c.currentTime);out.gain.linearRampToValueAtTime(.55,c.currentTime+.02);
     const comp=c.createDynamicsCompressor();out.connect(comp);comp.connect(c.destination);
-    const oscs=[[220,'sawtooth'],[277,'sawtooth'],[330,'square'],[440,'sawtooth']].map(([f,t])=>{const o=c.createOscillator();o.type=t;o.frequency.value=f;const g=c.createGain();g.gain.value=.25;o.connect(g);g.connect(out);o.start();return o;});
+    const oscs=[[440,'sawtooth'],[554,'sawtooth'],[660,'square'],[880,'sawtooth']].map(([f,t])=>{const o=c.createOscillator();o.type=t;o.frequency.value=f;const g=c.createGain();g.gain.value=.25;o.connect(g);g.connect(out);o.start();return o;});
     siren={c,out,oscs,t0:c.currentTime};
     document.querySelectorAll('.sirenbtn').forEach(b=>b.classList.add('on'));
   }catch(e){}
