@@ -141,6 +141,11 @@ table.ed td.c{text-align:center}
 .swapgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:14px}
 .swapgrid button{display:flex;flex-direction:column;align-items:center;padding:12px 4px}
 .swapgrid button b{font-size:28px} .swapgrid button small{font-size:11px;color:var(--mut);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.subask{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.subask>div{display:flex;flex-direction:column;align-items:center;padding:12px;border-radius:12px;font-size:12px;font-weight:900;letter-spacing:.1em}
+.subask b{font-size:44px;line-height:1.1;letter-spacing:0} .subask small{font-size:13px;font-weight:500;letter-spacing:0;color:var(--mut)}
+.subask .in{background:rgba(34,197,94,.15);color:#86efac;border:2px solid rgba(34,197,94,.5)}
+.subask .out{background:rgba(239,68,68,.12);color:#fca5a5;border:2px solid rgba(239,68,68,.45)}
 .benchtag{font-size:11px;font-weight:900;background:#000;color:var(--warn);padding:2px 6px;border-radius:5px;margin-left:6px;letter-spacing:.05em}
 .mbox .big{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .mbox .big button{font-size:28px;font-weight:800;padding:18px 0}
@@ -740,7 +745,22 @@ const ACT={
 
   /* live */
   resume:d=>{DB.currentId=d.id;save();go('live');},
-  sel:d=>{const t=+d.t,i=+d.i;if(view.sel&&view.sel.t===t&&view.sel.pi===i)view.sel=null;else view.sel={t,pi:i};render();},
+  sel:d=>{const t=+d.t,i=+d.i;if(view.sel&&view.sel.t===t&&view.sel.pi===i){view.sel=null;render();return;}
+    const prev=view.sel;
+    // panchina → poi giocatore in campo della stessa squadra: probabile cambio
+    if(prev&&prev.t===t&&prev.pi>=0&&i>=0&&onBench(prev)&&!onBench({t,pi:i})){
+      const g=cur();const s=stats(g);const P=g.teams[t].players;const st=pStatus(s.pf[t][prev.pi]);
+      if(!st){view.subAsk={t,inn:prev.pi,out:i};
+        openModal(`<h3>Cambio?</h3>
+          <div class="subask"><div class="in">⇡ ENTRA<b>${esc(P[prev.pi].num)}</b><small>${esc(P[prev.pi].last)}</small></div><div class="out">⇣ ESCE<b>${esc(P[i].num)}</b><small>${esc(P[i].last)}</small></div></div>
+          <div class="mbtns"><button class="ghost" data-a="subAskNo">No, seleziona solo #${esc(P[i].num)}</button><button class="ok" data-a="subAskYes">Sì, registra il cambio</button></div>`);
+        return;}
+    }
+    view.sel={t,pi:i};render();},
+  subAskYes:()=>{const a=view.subAsk;closeModal();if(!a)return;view.subAsk=null;
+    pushEv({type:'sub',team:a.t,pi:a.out,dir:'out'});addEv({type:'sub',team:a.t,pi:a.inn,dir:'in'});
+    const P=cur().teams[a.t].players;toast(`Cambio: entra #${P[a.inn].num}, esce #${P[a.out].num}`);},
+  subAskNo:()=>{const a=view.subAsk;closeModal();if(!a)return;view.subAsk=null;view.sel={t:a.t,pi:a.out};render();},
   pts:d=>{if(!view.sel)return;
     if(onBench(view.sel)){askSwap(view.sel,{kind:'pts',n:+d.n},`assegnare ${d.n} punt${d.n==='1'?'o':'i'}`);return;}
     addEv({type:'pts',team:view.sel.t,pi:view.sel.pi,pts:+d.n});},
