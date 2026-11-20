@@ -90,8 +90,14 @@ table.ed td.c{text-align:center}
 .tm.hasposs.a{box-shadow:inset 0 0 0 2px var(--a)} .tm.hasposs.b{box-shadow:inset 0 0 0 2px var(--b)}
 .pl{flex:1;display:grid;grid-template-columns:1fr minmax(290px,340px) 1fr;gap:10px;padding:10px;min-height:0}
 .roster{overflow:auto;min-height:0}
-.rgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.pbtn{display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:auto auto;column-gap:10px;align-items:center;text-align:left;padding:8px 10px;border:2px solid transparent;background:var(--panel);opacity:.6;min-height:64px;position:relative}
+.rgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;align-items:start}
+.rcol{display:flex;flex-direction:column;gap:6px;padding:6px;border-radius:12px}
+.oncol{background:rgba(34,197,94,.08);border:2px solid rgba(34,197,94,.35)}
+.benchcol{background:rgba(0,0,0,.2);border:2px dashed var(--line)}
+.rhd{font-size:12px;font-weight:900;letter-spacing:.12em;color:var(--mut);display:flex;justify-content:space-between;padding:0 4px}
+.oncol .rhd{color:#86efac}
+.rhd b.ok{color:var(--ok)} .rhd b.bad{color:var(--bad)}
+.pbtn{display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:auto auto;column-gap:10px;align-items:center;text-align:left;padding:6px 10px;border:2px solid transparent;background:var(--panel);opacity:.6;min-height:58px;position:relative}
 .pbtn.on{opacity:1;background:var(--panel2)}
 .roster.a .pbtn.on{border-color:#1e3a8a} .roster.b .pbtn.on{border-color:#7c2d12}
 .roster.a .pbtn.sel{border-color:var(--a);background:var(--a2);opacity:1} .roster.b .pbtn.sel{border-color:var(--b);background:var(--b2);opacity:1}
@@ -481,15 +487,18 @@ function teamHeader(g,s,ti){
 }
 function rosterHTML(g,s,ti){
   const t=g.teams[ti];const on=s.on[ti].size;
-  let h=`<div class="oncount">In campo: <b class="${on===5?'ok':'bad'}">${on}</b>/5</div><div class="rgrid">`;
-  t.players.forEach((p,pi)=>{
-    const f=s.pf[ti][pi];const st=pStatus(f);const isOn=s.on[ti].has(pi);const sel=view.sel&&view.sel.t===ti&&view.sel.pi===pi;
-    h+=`<button class="pbtn ${isOn?'on':''} ${sel?'sel':''} ${st?'dq':''}" data-a="sel" data-t="${ti}" data-i="${pi}">
+  const btn=pi=>{const p=t.players[pi];const f=s.pf[ti][pi];const st=pStatus(f);const isOn=s.on[ti].has(pi);const sel=view.sel&&view.sel.t===ti&&view.sel.pi===pi;
+    return `<button class="pbtn ${isOn?'on':''} ${sel?'sel':''} ${st?'dq':''}" data-a="sel" data-t="${ti}" data-i="${pi}">
       <span class="pn">${esc(p.num)}</span><span class="pnm">${esc(p.last)}${p.captain?' (C)':''}</span><span class="pp">${s.pp[ti][pi]}</span>
-      <span class="pf">${dots(f.length,5)}</span>${st?`<span class="bdg">${st==='GD'?'GD':'5F'}</span>`:''}</button>`;
-  });
+      <span class="pf">${dots(f.length,5)}</span>${st?`<span class="bdg">${st==='GD'?'GD':'5F'}</span>`:''}</button>`;};
+  const idx=t.players.map((p,i)=>i).sort((a,b)=>numSort(t.players[a],t.players[b]));
+  const onL=idx.filter(i=>s.on[ti].has(i)), bench=idx.filter(i=>!s.on[ti].has(i));
+  let h=`<div class="rgrid">
+    <div class="rcol oncol"><div class="rhd">IN CAMPO <b class="${on===5?'ok':'bad'}">${on}/5</b></div>${onL.map(btn).join('')||'<div class="mut sm">nessuno</div>'}</div>
+    <div class="rcol benchcol"><div class="rhd">PANCHINA <b>${bench.length}</b></div>${bench.map(btn).join('')}</div>
+  </div>`;
   const cs=view.sel&&view.sel.t===ti&&view.sel.pi===-1;const cf=s.cf[ti];
-  h+=`</div><button class="coach ${cs?'sel':''}" data-a="sel" data-t="${ti}" data-i="-1"><span>🧑‍🏫 All. ${esc(t.coach||'—')}</span><span class="sm">${cf.map(fcode).join(' ')||'nessun fallo'}${cStatus(cf)?' · <b style="color:var(--bad)">GD</b>':''}</span></button>`;
+  h+=`<button class="coach ${cs?'sel':''}" data-a="sel" data-t="${ti}" data-i="-1"><span>🧑‍🏫 All. ${esc(t.coach||'—')}</span><span class="sm">${cf.map(fcode).join(' ')||'nessun fallo'}${cStatus(cf)?' · <b style="color:var(--bad)">GD</b>':''}</span></button>`;
   return h;
 }
 function evText(g,e){
