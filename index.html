@@ -75,6 +75,16 @@ table.ed td.c{text-align:center}
 .poss.none{border-color:var(--warn)} .poss.none .pl3{color:var(--warn)}
 .sirenbtn{width:100%;padding:10px;font-size:18px;font-weight:900;letter-spacing:.1em;background:#7f1d1d;color:#fecaca;border:2px solid #b91c1c;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
 .sirenbtn.on{background:#ef4444;color:#fff;box-shadow:0 0 24px #ef4444}
+.tobanner{position:relative;display:flex;align-items:center;justify-content:center;gap:24px;padding:8px 16px 12px;color:#fff;overflow:hidden}
+.tobanner.t0{background:var(--a2)} .tobanner.t1{background:var(--b2)}
+.tobanner .tolbl{display:flex;flex-direction:column;font-size:14px;font-weight:900;letter-spacing:.15em;line-height:1.2}
+.tobanner .tolbl b{font-size:20px;letter-spacing:0}
+.tobanner .tonum{font-size:64px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;min-width:110px;text-align:center}
+.tobanner.warn .tonum{color:#fde047;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+.tobanner button{background:rgba(0,0,0,.3);font-weight:700}
+.tobanner .toprog{position:absolute;left:0;right:0;bottom:0;height:5px;background:rgba(0,0,0,.35)}
+.tobanner .toprog i{display:block;height:100%;background:#fff;transition:width .1s linear}
 .posstag{font-size:12px;font-weight:900;padding:2px 8px;border-radius:6px;color:#fff;letter-spacing:.05em}
 .tm.a .posstag{background:var(--a)} .tm.b .posstag{background:var(--b)}
 .tm.hasposs.a{box-shadow:inset 0 0 0 2px var(--a)} .tm.hasposs.b{box-shadow:inset 0 0 0 2px var(--b)}
@@ -255,7 +265,7 @@ function sirenStop(){
   s.oscs.forEach(o=>o.stop(end+.08));
   document.querySelectorAll('.sirenbtn').forEach(b=>b.classList.remove('on'));
 }
-function beep(){sirenStart();setTimeout(sirenStop,1600);}
+function beep(ms){sirenStart();setTimeout(sirenStop,ms||1600);}
 
 /* =================== VIEW STATE =================== */
 const view={screen:'home',sel:null,teamEdit:null,sheetId:null,pending:null};
@@ -310,14 +320,37 @@ function addEv(e){
 /* =================== CLOCK =================== */
 let lastTick=0, saveTick=0, wakeLock=null;
 setInterval(()=>{
-  const g=cur(); if(!g||!g.running) return;
+  const g=cur(); if(g&&g.toTimer) toTick(g);
+  if(!g||!g.running) return;
   const now=performance.now(); g.clock-=(now-lastTick)/1000; lastTick=now;
   if(g.clock<=0){g.clock=0;g.running=false;save();beep();render();toast(`Fine ${perLong(g.period).toLowerCase()}`);return;}
   if(now-saveTick>5000){saveTick=now;save();}
   updClock();
 },100);
+/* timer del timeout: 60 s, sirena a 10 s dalla fine (50") e alla fine */
+const TO_SEC=60;
+function toLeft(g){return Math.max(0,(g.toTimer.end-Date.now())/1000);}
+function toTick(g){
+  const left=toLeft(g);
+  if(!g.toTimer.warned&&left<=10){g.toTimer.warned=true;save();beep(700);}
+  if(left<=0){g.toTimer=null;save();beep(1600);toast('Fine timeout');if(view.screen==='live')render();return;}
+  const el=document.getElementById('toTime');if(el){el.textContent=Math.ceil(left);el.parentElement.classList.toggle('warn',left<=10);}
+  const bar=document.getElementById('toBar');if(bar)bar.style.width=(left/TO_SEC*100)+'%';
+}
+function toBannerHTML(g){
+  const t=g.toTimer;const left=toLeft(g);
+  return `<div class="tobanner t${t.team} ${left<=10?'warn':''}">
+    <div class="tolbl">TIMEOUT<b>${esc(g.teams[t.team].name)}</b></div>
+    <div class="tonum" id="toTime">${Math.ceil(left)}</div>
+    <button data-a="toEnd">Termina</button>
+    <div class="toprog"><i id="toBar" style="width:${left/TO_SEC*100}%"></i></div>
+  </div>`;
+}
 function updClock(){const g=cur();const el=document.getElementById('clock');if(!g||!el)return;el.textContent=fmtClock(g.clock);el.classList.toggle('run',!!g.running);}
-function clockToggle(){const g=cur();if(!g||g.status!=='live')return;if(!g.running&&g.clock<=0){toast('Tempo scaduto: chiudi il periodo');return;}g.running=!g.running;lastTick=performance.now();save();updClock();}
+function clockToggle(){const g=cur();if(!g||g.status!=='live')return;if(!g.running&&g.clock<=0){toast('Tempo scaduto: chiudi il periodo');return;}try{audio();}catch(e){}
+  g.running=!g.running;lastTick=performance.now();
+  if(g.running&&g.toTimer){g.toTimer=null;save();render();return;} // ripresa del gioco: chiude il timeout
+  save();updClock();}
 async function keepAwake(){try{if('wakeLock' in navigator&&!wakeLock){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&view.screen==='live')keepAwake();});
 
@@ -505,6 +538,7 @@ SCREENS.live=()=>{
     </div>
     ${teamHeader(g,s,1)}
   </header>
+  ${g.toTimer?toBannerHTML(g):''}
   <main class="pl">
     <section class="roster a">${rosterHTML(g,s,0)}</section>
     <section class="acts">${actsHTML(g,s)}</section>
@@ -671,15 +705,17 @@ const ACT={
     if(!on&&pStatus(s.pf[view.sel.t][view.sel.pi])){toast(`#${p.num} non può rientrare (${pStatus(s.pf[view.sel.t][view.sel.pi])})`,true);return;}
     addEv({type:'sub',team:view.sel.t,pi:view.sel.pi,dir:on?'out':'in'});},
   timeout:d=>{const g=cur();const s=stats(g);const ti=+d.t;const used=s.to[ti].filter(e=>toSeg(e.period)===toSeg(g.period)).length;
-    const doTo=()=>{g.running=false;addEv({type:'to',team:ti,pi:-1});toast(`Timeout ${g.teams[ti].name}`);};
+    const doTo=()=>{try{audio();}catch(e){} g.running=false;addEv({type:'to',team:ti,pi:-1});const ev=g.events[g.events.length-1];
+      g.toTimer={team:ti,ev:ev.id,end:Date.now()+TO_SEC*1000,warned:false};save();render();toast(`Timeout ${g.teams[ti].name}: 60 secondi`);};
     let warn='';
     if(used>=toLimit(g.period))warn=`${esc(g.teams[ti].name)} ha già usato tutti i timeout di questa frazione (${toLimit(g.period)}).`;
     else if(g.period===4&&g.clock<=120&&s.to[ti].filter(e=>e.period===4&&e.clock<=120).length>=2)warn='Negli ultimi 2 minuti del 4° quarto sono concessi al massimo 2 timeout.';
     if(warn)ask('Timeout non disponibile',warn+' Registrarlo comunque?','Registra',doTo,true);else doTo();},
   undo:()=>{const g=cur();if(!g.events.length)return;const e=g.events[g.events.length-1];
-    ask('Annullare l’ultimo evento?',`${perLabel(e.period)} ${fmtMS(e.clock)} – ${evText(g,e)}`,'Annulla evento',()=>{g.events.pop();save();render();});},
+    ask('Annullare l’ultimo evento?',`${perLabel(e.period)} ${fmtMS(e.clock)} – ${evText(g,e)}`,'Annulla evento',()=>{g.events.pop();if(g.toTimer&&g.toTimer.ev===e.id)g.toTimer=null;save();render();});},
   delEv:d=>{const g=cur();const e=g.events.find(x=>x.id===d.id);if(!e)return;
-    ask('Eliminare questo evento?',`${perLabel(e.period)} ${fmtMS(e.clock)} – ${evText(g,e)}<br><br>Il punteggio progressivo verrà ricalcolato.`,'Elimina',()=>{g.events=g.events.filter(x=>x.id!==d.id);save();render();},true);},
+    ask('Eliminare questo evento?',`${perLabel(e.period)} ${fmtMS(e.clock)} – ${evText(g,e)}<br><br>Il punteggio progressivo verrà ricalcolato.`,'Elimina',()=>{g.events=g.events.filter(x=>x.id!==d.id);if(g.toTimer&&g.toTimer.ev===d.id)g.toTimer=null;save();render();},true);},
+  toEnd:()=>{const g=cur();if(!g||!g.toTimer)return;g.toTimer=null;save();render();},
   clockToggle:()=>clockToggle(),
   clk:d=>{const g=cur();g.clock=Math.min(perLen(g,g.period),Math.max(0,g.clock+(+d.d)));save();updClock();},
   clkEdit:()=>{const g=cur();g.running=false;save();updClock();
