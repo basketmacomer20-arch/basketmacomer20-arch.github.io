@@ -138,6 +138,10 @@ table.ed td.c{text-align:center}
 .mbox{background:var(--panel);border-radius:16px;padding:20px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .mbox h3{font-size:19px}
 .mbox .mbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;justify-content:flex-end}
+.swapgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:14px}
+.swapgrid button{display:flex;flex-direction:column;align-items:center;padding:12px 4px}
+.swapgrid button b{font-size:28px} .swapgrid button small{font-size:11px;color:var(--mut);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.benchtag{font-size:11px;font-weight:900;background:#000;color:var(--warn);padding:2px 6px;border-radius:5px;margin-left:6px;letter-spacing:.05em}
 .mbox .big{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .mbox .big button{font-size:28px;font-weight:800;padding:18px 0}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#f8fafc;color:#0f172a;padding:12px 20px;border-radius:12px;font-weight:600;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:90vw;text-align:center}
@@ -323,6 +327,21 @@ function perLen(g,p){return (p>4?g.otLength:g.periodLength)*60;}
 function curTeamFouls(g,s,ti){return s.tf[ti][Math.min(g.period,4)-1];}
 function toMinute(g,e){const el=perLen(g,e.period)-e.clock;return Math.max(1,Math.ceil(el/60-1e-9));}
 
+function onBench(sel){if(!sel||sel.pi<0)return false;const g=cur();return !stats(g).on[sel.t].has(sel.pi);}
+function pushEv(e){const g=cur();e.id=uid();e.period=g.period;e.clock=Math.round(g.clock*10)/10;g.events.push(e);}
+/* giocatore in panchina: chiede chi esce, registra il cambio e poi l'azione */
+function askSwap(sel,next,what){
+  const g=cur();const s=stats(g);const t=g.teams[sel.t];const p=t.players[sel.pi];
+  const st=pStatus(s.pf[sel.t][sel.pi]);
+  if(st){toast(`#${p.num} è in panchina e non può rientrare (${st==='GD'?'espulso':'5 falli'})`,true);return;}
+  view.swap={t:sel.t,pi:sel.pi,next};
+  const on=[...s.on[sel.t]].sort((a,b)=>numSort(t.players[a],t.players[b]));
+  openModal(`<h3>#${esc(p.num)} ${esc(p.last)} è in panchina</h3>
+    <div class="mut">Per ${what} deve essere in campo. <b>Chi esce?</b></div>
+    <div class="swapgrid">${on.map(i=>`<button data-a="swapDo" data-o="${i}"><b>${esc(t.players[i].num)}</b><small>${esc(t.players[i].last)}</small></button>`).join('')}</div>
+    ${on.length<5?`<button class="ghost" style="width:100%;margin-top:8px" data-a="swapDo" data-o="-1">Entra senza far uscire nessuno (in campo solo ${on.length})</button>`:''}
+    <div class="mbtns"><button class="ghost" data-a="closeModal">Annulla – giocatore sbagliato</button></div>`);
+}
 function addEv(e){
   const g=cur(); if(!g) return;
   e.id=uid(); e.period=g.period; e.clock=Math.round(g.clock*10)/10;
@@ -529,7 +548,8 @@ function actsHTML(g,s){
   const sel=view.sel;let h='';
   if(!sel)h+=`<div class="selinfo none">Tocca un giocatore o l'allenatore</div>`;
   else{const t=g.teams[sel.t];const p=sel.pi>=0?t.players[sel.pi]:null;
-    h+=`<div class="selinfo t${sel.t}">${p?`#${esc(p.num)} ${esc(p.last)} ${esc(p.first)}`:`Allenatore ${esc(t.coach||'')}`}</div>`;}
+    const bench=p&&!s.on[sel.t].has(sel.pi);
+    h+=`<div class="selinfo t${sel.t}">${p?`#${esc(p.num)} ${esc(p.last)} ${esc(p.first)}${bench?' <span class="benchtag">IN PANCHINA</span>':''}`:`Allenatore ${esc(t.coach||'')}`}</div>`;}
   const isP=sel&&sel.pi>=0, isC=sel&&sel.pi===-1, dis=!sel?'disabled':'';
   if(!isC){
     h+=`<div class="ag pts"><button data-a="pts" data-n="1" ${dis}>+1<small>tiro libero</small></button><button data-a="pts" data-n="2" ${dis}>+2<small>canestro</small></button><button data-a="pts" data-n="3" ${dis}>+3<small>da tre</small></button></div>
@@ -721,8 +741,23 @@ const ACT={
   /* live */
   resume:d=>{DB.currentId=d.id;save();go('live');},
   sel:d=>{const t=+d.t,i=+d.i;if(view.sel&&view.sel.t===t&&view.sel.pi===i)view.sel=null;else view.sel={t,pi:i};render();},
-  pts:d=>{if(!view.sel)return;addEv({type:'pts',team:view.sel.t,pi:view.sel.pi,pts:+d.n});},
-  foul:d=>{if(!view.sel)return;view.pending={t:view.sel.t,pi:view.sel.pi,f:d.f};
+  pts:d=>{if(!view.sel)return;
+    if(onBench(view.sel)){askSwap(view.sel,{kind:'pts',n:+d.n},`assegnare ${d.n} punt${d.n==='1'?'o':'i'}`);return;}
+    addEv({type:'pts',team:view.sel.t,pi:view.sel.pi,pts:+d.n});},
+  swapDo:d=>{const sw=view.swap;closeModal();if(!sw)return;view.swap=null;const g=cur();
+    const o=+d.o; if(o>=0)pushEv({type:'sub',team:sw.t,pi:o,dir:'out'}); pushEv({type:'sub',team:sw.t,pi:sw.pi,dir:'in'});
+    view.sel={t:sw.t,pi:sw.pi};
+    if(sw.next.kind==='pts')addEv({type:'pts',team:sw.t,pi:sw.pi,pts:sw.next.n});
+    else{save();render();ACT.foul({f:sw.next.f});}},
+  benchB:()=>{const sel=view.sel;closeModal();if(!sel)return;view.sel={t:sel.t,pi:-1};ACT.foul({f:'B'});},
+  benchTSwap:()=>{const sel=view.sel;closeModal();if(sel)askSwap(sel,{kind:'foul',f:'T'},'registrare il fallo tecnico');},
+  foul:d=>{if(!view.sel)return;
+    if(onBench(view.sel)){
+      if(d.f==='P'||d.f==='U'){askSwap(view.sel,{kind:'foul',f:d.f},'registrare il fallo');return;}
+      if(d.f==='T'){const p=cur().teams[view.sel.t].players[view.sel.pi];
+        openModal(`<h3>#${esc(p.num)} è in panchina</h3><div class="mut">Un fallo tecnico a un giocatore in panchina va registrato all'<b>allenatore</b> come fallo <b>B</b>.</div><div class="mbtns"><button class="ghost" data-a="closeModal">Annulla</button><button data-a="benchTSwap">Era in campo: registra il cambio</button><button class="pri" data-a="benchB">Registra B all'allenatore</button></div>`);return;}
+    }
+    view.pending={t:view.sel.t,pi:view.sel.pi,f:d.f};
     const opts=(d.f==='T'||d.f==='C'||d.f==='B')?[0,1]:[0,1,2,3];
     const names={P:'personale',T:'tecnico',U:'antisportivo',D:'da espulsione',C:'tecnico allenatore',B:'tecnico panchina'};
     openModal(`<h3>Fallo ${names[d.f]} – tiri liberi?</h3><div class="big" style="grid-template-columns:repeat(${opts.length},1fr)">${opts.map(n=>`<button data-a="foulFT" data-n="${n}">${n}</button>`).join('')}</div><div class="mbtns"><button class="ghost" data-a="closeModal">Annulla</button></div>`);},
