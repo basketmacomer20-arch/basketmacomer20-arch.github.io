@@ -146,6 +146,7 @@ table.ed td.c{text-align:center}
 .subask b{font-size:44px;line-height:1.1;letter-spacing:0} .subask small{font-size:13px;font-weight:500;letter-spacing:0;color:var(--mut)}
 .subask .in{background:rgba(34,197,94,.15);color:#86efac;border:2px solid rgba(34,197,94,.5)}
 .subask .out{background:rgba(239,68,68,.12);color:#fca5a5;border:2px solid rgba(239,68,68,.45)}
+.addp{background:transparent;border:2px dashed var(--line);color:var(--mut);font-size:13px;padding:8px}
 .benchtag{font-size:11px;font-weight:900;background:#000;color:var(--warn);padding:2px 6px;border-radius:5px;margin-left:6px;letter-spacing:.05em}
 .mbox .big{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .mbox .big button{font-size:28px;font-weight:800;padding:18px 0}
@@ -347,6 +348,15 @@ function askSwap(sel,next,what){
     ${on.length<5?`<button class="ghost" style="width:100%;margin-top:8px" data-a="swapDo" data-o="-1">Entra senza far uscire nessuno (in campo solo ${on.length})</button>`:''}
     <div class="mbtns"><button class="ghost" data-a="closeModal">Annulla – giocatore sbagliato</button></div>`);
 }
+function addPlayerToGame(ti,p){
+  const g=cur();const t=g.teams[ti];const num=String(p.num||'').trim();
+  if(t.players.length>=12){toast('A referto ci sono già 12 giocatori',true);return;}
+  if(!num){toast('Inserisci il numero di maglia',true);return;}
+  if(!String(p.last||'').trim()){toast('Inserisci il cognome',true);return;}
+  if(t.players.some(q=>String(q.num).trim()===num)){toast(`Il numero ${num} è già a referto`,true);return;}
+  t.players.push({num,last:String(p.last).trim(),first:String(p.first||'').trim(),lic:String(p.lic||'').trim(),starter:false,captain:false});
+  save();closeModal();render();toast(`#${num} ${p.last} aggiunto a referto (in panchina)`);
+}
 function addEv(e){
   const g=cur(); if(!g) return;
   e.id=uid(); e.period=g.period; e.clock=Math.round(g.clock*10)/10;
@@ -535,7 +545,7 @@ function rosterHTML(g,s,ti){
   const onL=idx.filter(i=>s.on[ti].has(i)), bench=idx.filter(i=>!s.on[ti].has(i));
   let h=`<div class="rgrid">
     <div class="rcol oncol"><div class="rhd">IN CAMPO <b class="${on===5?'ok':'bad'}">${on}/5</b></div>${onL.map(btn).join('')||'<div class="mut sm">nessuno</div>'}</div>
-    <div class="rcol benchcol"><div class="rhd">PANCHINA <b>${bench.length}</b></div>${bench.map(btn).join('')}</div>
+    <div class="rcol benchcol"><div class="rhd">PANCHINA <b>${bench.length}</b></div>${bench.map(btn).join('')}${t.players.length<12?`<button class="addp" data-a="addPOpen" data-t="${ti}">＋ Aggiungi a referto</button>`:''}</div>
   </div>`;
   const cs=view.sel&&view.sel.t===ti&&view.sel.pi===-1;const cf=s.cf[ti];
   h+=`<button class="coach ${cs?'sel':''}" data-a="sel" data-t="${ti}" data-i="-1"><span>🧑‍🏫 All. ${esc(t.coach||'—')}</span><span class="sm">${cf.map(fcode).join(' ')||'nessun fallo'}${cStatus(cf)?' · <b style="color:var(--bad)">GD</b>':''}</span></button>`;
@@ -641,8 +651,9 @@ function sheetTeam(g,s,ti){
   const ot=toList('ot');
   let tf='';for(let p=0;p<4;p++){tf+=`<span><span class="pl2">Q${p+1}</span>`;for(let i=1;i<=4;i++)tf+=`<span class="bx ${s.tf[ti][p]>=i?'x':''}">${s.tf[ti][p]>=i?i:''}</span>`;tf+='</span>';}
   let rows='';
-  for(let i=0;i<12;i++){
-    const p=t.players[i];
+  const order=t.players.map((p,i)=>i).sort((a,b)=>numSort(t.players[a],t.players[b]));
+  for(let r=0;r<Math.max(12,order.length);r++){
+    const i=order[r];const p=t.players[i];
     if(!p){rows+=`<tr><td class="lic"></td><td class="nm"></td><td class="n"></td><td class="e"></td>${'<td class="f"></td>'.repeat(5)}</tr>`;continue;}
     const f=s.pf[ti][i];const st=pStatus(f);
     const ent=p.starter?'ⓧ':(s.ent[ti].has(i)?'X':'');
@@ -815,11 +826,25 @@ const ACT={
   liveMenu:()=>{const g=cur();openModal(`<h3>Menu gara</h3>
     <div style="display:grid;gap:8px">
       <button data-a="sheet" data-id="${g.id}">📄 Visualizza / stampa referto</button>
+      <div class="row">${[0,1].map(ti=>`<button style="flex:1" data-a="addPOpen" data-t="${ti}" ${g.teams[ti].players.length>=12?'disabled':''}>＋ Giocatore a referto<br><small class="mut">${esc(g.teams[ti].name)} (${g.teams[ti].players.length}/12)</small></button>`).join('')}</div>
       <div class="row"><span style="flex:1">Periodo: <b>${perLabel(g.period)}</b></span><button data-a="perAdj" data-d="-1">−</button><button data-a="perAdj" data-d="1">＋</button></div>
       ${g.status==='finished'?`<button data-a="reopen">↺ Riapri gara (correzioni)</button>`:`<button class="bad" data-a="forceEnd">🏁 Termina gara ora</button>`}
       <button data-a="fullscreen">⛶ Schermo intero</button>
       <button data-a="nav" data-s="home">← Torna al menu principale</button>
     </div><div class="mbtns"><button class="ghost" data-a="closeModal">Chiudi</button></div>`);},
+  addPOpen:d=>{const g=cur();const ti=+d.t;const t=g.teams[ti];
+    if(t.players.length>=12){toast('A referto ci sono già 12 giocatori',true);return;}
+    const ana=DB.teams.find(x=>x.name.trim().toLowerCase()===t.name.trim().toLowerCase());
+    const inGame=p=>t.players.some(q=>String(q.num).trim()===String(p.num).trim()&&q.last.trim().toLowerCase()===String(p.last).trim().toLowerCase());
+    const avail=ana?ana.players.map((p,k)=>({p,k})).filter(x=>!inGame(x.p)).sort((a,b)=>numSort(a.p,b.p)):[];
+    openModal(`<h3>Aggiungi a referto – ${esc(t.name)}</h3><div class="mut sm">Ora ${t.players.length}/12. Il giocatore entra in panchina.</div>
+      ${avail.length?`<label style="margin-top:12px">Dall'anagrafica</label><div class="swapgrid">${avail.map(x=>`<button data-a="addPAna" data-t="${ti}" data-k="${x.k}"><b>${esc(x.p.num)}</b><small>${esc(x.p.last)}</small></button>`).join('')}</div>`:''}
+      <label style="margin-top:14px">${avail.length?'Oppure inserisci a mano':'Nuovo giocatore'}</label>
+      <div style="display:grid;grid-template-columns:70px 1fr 1fr;gap:6px"><input id="apNum" placeholder="N°" inputmode="numeric"><input id="apLast" placeholder="Cognome"><input id="apFirst" placeholder="Nome"></div>
+      <input id="apLic" placeholder="Licenza (facoltativa)" style="margin-top:6px">
+      <div class="mbtns"><button class="ghost" data-a="closeModal">Annulla</button><button class="ok" data-a="addPManual" data-t="${ti}">Aggiungi</button></div>`);},
+  addPAna:d=>{const t=cur().teams[+d.t];const ana=DB.teams.find(x=>x.name.trim().toLowerCase()===t.name.trim().toLowerCase());const p=ana&&ana.players[+d.k];if(p)addPlayerToGame(+d.t,p);},
+  addPManual:d=>addPlayerToGame(+d.t,{num:$('#apNum').value,last:$('#apLast').value,first:$('#apFirst').value,lic:$('#apLic').value}),
   perAdj:d=>{const g=cur();const p=Math.max(1,g.period+(+d.d));if(p===g.period)return;g.running=false;g.period=p;g.clock=perLen(g,p);save();closeModal();render();toast(`Periodo impostato: ${perLabel(p)}`);},
   forceEnd:()=>{const g=cur();ask('Terminare la gara ora?','La gara verrà segnata come terminata con il punteggio attuale.','Termina',()=>{g.running=false;g.status='finished';g.endedAt=Date.now();save();view.sheetId=g.id;view.sheetFrom='live';go('sheet');},true);},
   reopen:()=>{const g=cur();g.status='live';save();closeModal();render();toast('Gara riaperta');},
