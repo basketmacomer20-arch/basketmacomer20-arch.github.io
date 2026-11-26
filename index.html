@@ -436,7 +436,7 @@ SCREENS.home=()=>{
   </div>
   ${!isStandalone()&&!installPrompt&&location.protocol.startsWith('http')?`<p class="mut sm" style="margin-top:16px">Per installarla: menu del browser ⋮ → <b>Installa app</b> / <b>Aggiungi a schermata Home</b> (su iPad: Condividi → Aggiungi alla schermata Home).</p>`:''}
   <p class="mut sm" style="margin-top:24px">I dati sono salvati solo su questo dispositivo/browser. Fai un backup periodico.
-  Durante la gara: <b>Spazio</b> avvia/ferma il cronometro.</p>
+  Durante la gara: <b>Invio</b> (anche dal tastierino numerico) o <b>Spazio</b> avvia/ferma il cronometro, <b>S</b> suona la sirena.</p>
   </div>`;
 };
 
@@ -927,7 +927,12 @@ document.addEventListener('keydown',e=>{
   if(view.screen==='live'&&!$('#modal').innerHTML&&e.code==='KeyS'&&e.target.tagName!=='INPUT'){if(!e.repeat)sirenStart();return;}
   if(view.screen!=='live'||$('#modal').innerHTML) { if(e.key==='Enter'&&$('#clkIn'))ACT.clkSet(); if(e.key==='Escape')closeModal(); return; }
   if(e.target.tagName==='INPUT') return;
-  if(e.code==='Space'){e.preventDefault();clockToggle();}
+  // Spazio o Invio (anche Invio del tastierino numerico bluetooth): avvia/ferma il cronometro
+  if(e.code==='Space'||e.key==='Enter'||e.code==='NumpadEnter'){
+    e.preventDefault(); // evita che Invio "clicchi" il pulsante toccato per ultimo
+    if(document.activeElement&&document.activeElement!==document.body)document.activeElement.blur();
+    if(!e.repeat)clockToggle();
+  }
 });
 $('#importFile').addEventListener('change',e=>{
   const f=e.target.files[0]; if(!f) return; const r=new FileReader();
