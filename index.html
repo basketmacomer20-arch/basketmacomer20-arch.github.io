@@ -268,6 +268,8 @@ table.ed td.c{text-align:center}
 .rs{table-layout:fixed}
 .rs th{font-size:6pt;padding:0;text-align:center}
 .rs td{height:3.72mm;padding:0;text-align:center;font-size:6.3pt;position:relative}
+.rs th.rsn{font-size:6.5pt;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sh-foot th.scn{width:28%;font-size:6.5pt;text-transform:uppercase;word-break:break-word}
 .rs td.s{color:#666}
 .rs td.gs{border-left:1.3pt solid #000}
 .rs td.mk{color:#000;font-weight:700;background:linear-gradient(to top right,transparent 46%,#000 47%,#000 53%,transparent 54%)}
@@ -895,7 +897,7 @@ function sheetRunning(g,s){
   const hit=[{},{}],pe=[new Set(),new Set()];
   [0,1].forEach(ti=>s.run[ti].forEach((r,i,a)=>{hit[ti][r.n]=r;const nx=a[i+1];if(!nx||nx.period!==r.period)pe[ti].add(r.n);}));
   const R=Math.max(40,Math.ceil(Math.max(s.score[0],s.score[1])/4));
-  let h=`<table class="rs"><tr><th colspan="16">PUNTEGGIO PROGRESSIVO</th></tr><tr>`;
+  let h=`<table class="rs"><tr><th colspan="16">PUNTEGGIO PROGRESSIVO</th></tr><tr><th colspan="8" class="rsn">A · ${esc(g.teams[0].name)}</th><th colspan="8" class="rsn">B · ${esc(g.teams[1].name)}</th></tr><tr>`;
   for(let k=0;k<4;k++)h+=`<th>A</th><th></th><th></th><th>B</th>`;
   h+='</tr>';
   const cell=(ti,n,first)=>{const r=hit[ti][n];const cls=[];if(pe[ti].has(n))cls.push('pe');
@@ -913,7 +915,7 @@ function sheetFoot(g,s){
   const sg=(l,v)=>`<span>${l}</span><em>${esc(v)}</em><span class="ln"></span>`;
   return `<div class="sh-foot">
     <div><table>
-      <tr><th>Punteggio</th><th>A</th><th>B</th></tr>
+      <tr><th>Punteggio</th><th class="scn">A · ${esc(g.teams[0].name)}</th><th class="scn">B · ${esc(g.teams[1].name)}</th></tr>
       ${[0,1,2,3].map(i=>`<tr><td>${i+1}° Quarto</td><td style="text-align:center">${P(0,i)}</td><td style="text-align:center">${P(1,i)}</td></tr>`).join('')}
       <tr><td>Supplementari</td><td style="text-align:center">${maxP>4?ot[0]:''}</td><td style="text-align:center">${maxP>4?ot[1]:''}</td></tr>
       <tr><td><b>Punteggio finale</b></td><td style="text-align:center"><b>${s.score[0]}</b></td><td style="text-align:center"><b>${s.score[1]}</b></td></tr>
