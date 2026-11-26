@@ -436,7 +436,7 @@ SCREENS.home=()=>{
   </div>
   ${!isStandalone()&&!installPrompt&&location.protocol.startsWith('http')?`<p class="mut sm" style="margin-top:16px">Per installarla: menu del browser ⋮ → <b>Installa app</b> / <b>Aggiungi a schermata Home</b> (su iPad: Condividi → Aggiungi alla schermata Home).</p>`:''}
   <p class="mut sm" style="margin-top:24px">I dati sono salvati solo su questo dispositivo/browser. Fai un backup periodico.
-  Durante la gara: <b>Invio</b> (anche dal tastierino numerico) o <b>Spazio</b> avvia/ferma il cronometro, <b>S</b> suona la sirena.</p>
+  Durante la gara, da tastiera o tastierino numerico: <b>Invio</b> (o Spazio) avvia/ferma il cronometro · <b>0</b> (o S) tenuto premuto suona la sirena · <b>+</b> / <b>−</b> cronometro ±1 secondo · <b>.</b> inverte il possesso.</p>
   </div>`;
 };
 
@@ -921,10 +921,16 @@ document.addEventListener('pointerdown',e=>{if(e.target.closest('[data-siren]'))
 ['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,()=>sirenStop()));
 document.addEventListener('pointerleave',e=>{if(e.target.closest&&e.target.closest('[data-siren]'))sirenStop();},true);
 document.addEventListener('contextmenu',e=>{if(e.target.closest('[data-siren]'))e.preventDefault();});
-document.addEventListener('keyup',e=>{if(e.code==='KeyS')sirenStop();});
+/* tastierino numerico: 0 (tieni premuto) sirena, + / − cronometro ±1 s, . (o ,) inverte il possesso */
+const SIREN_KEYS=['KeyS','Numpad0'];
+document.addEventListener('keyup',e=>{if(SIREN_KEYS.includes(e.code))sirenStop();});
 window.addEventListener('blur',()=>sirenStop());
 document.addEventListener('keydown',e=>{
-  if(view.screen==='live'&&!$('#modal').innerHTML&&e.code==='KeyS'&&e.target.tagName!=='INPUT'){if(!e.repeat)sirenStart();return;}
+  const liveFree=view.screen==='live'&&!$('#modal').innerHTML&&e.target.tagName!=='INPUT';
+  if(liveFree&&SIREN_KEYS.includes(e.code)){e.preventDefault();if(!e.repeat)sirenStart();return;}
+  if(liveFree&&(e.code==='NumpadAdd'||e.code==='NumpadSubtract')){e.preventDefault();ACT.clk({d:e.code==='NumpadAdd'?'1':'-1'});return;}
+  if(liveFree&&(e.code==='NumpadDecimal'||e.code==='NumpadComma')){e.preventDefault();if(e.repeat)return;
+    const g=cur();if(g.arrow==null){toast('Assegna prima il possesso toccando la freccia ◀ o ▶');return;}ACT.arrow({t:String(g.arrow)});return;}
   if(view.screen!=='live'||$('#modal').innerHTML) { if(e.key==='Enter'&&$('#clkIn'))ACT.clkSet(); if(e.key==='Escape')closeModal(); return; }
   if(e.target.tagName==='INPUT') return;
   // Spazio o Invio (anche Invio del tastierino numerico bluetooth): avvia/ferma il cronometro
