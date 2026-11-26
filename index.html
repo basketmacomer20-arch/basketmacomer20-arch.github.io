@@ -149,6 +149,9 @@ table.ed td.c{text-align:center}
 .subrow{display:grid;grid-template-columns:1fr 52px;gap:6px}
 .editp{font-size:20px;padding:6px}
 .editp:disabled{opacity:.3}
+.kchip{display:inline-flex;align-items:center;gap:4px;background:#0b1222;border:1px solid var(--line);border-bottom-width:3px;border-radius:8px;padding:4px 4px 4px 10px;font-weight:700;font-size:14px}
+.kchip button{padding:2px 7px;font-size:12px;background:transparent;color:var(--mut)}
+.keywait{font-size:56px;text-align:center;margin:16px 0;animation:blink 1.2s steps(2) infinite}
 .addp{background:transparent;border:2px dashed var(--line);color:var(--mut);font-size:13px;padding:8px}
 .benchtag{font-size:11px;font-weight:900;background:#000;color:var(--warn);padding:2px 6px;border-radius:5px;margin-left:6px;letter-spacing:.05em}
 .mbox .big{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -277,7 +280,7 @@ function setPath(o,path,v){const k=path.split('.');let c=o;for(let i=0;i<k.lengt
 let toastT;
 function toast(msg,bad){const t=$('#toast');t.textContent=msg;t.className=bad?'bad':'';clearTimeout(toastT);toastT=setTimeout(()=>{t.textContent='';},bad?4500:2200);}
 function openModal(html){$('#modal').innerHTML=`<div class="mbg" data-a="modalBg"><div class="mbox">${html}</div></div>`;const f=$('#modal input');if(f)setTimeout(()=>f.focus(),30);}
-function closeModal(){$('#modal').innerHTML='';}
+function closeModal(){$('#modal').innerHTML='';if(typeof view!=='undefined')view.keyCapture=null;}
 let confirmCb=null;
 function ask(title,text,okLabel,cb,danger){confirmCb=cb;openModal(`<h3>${esc(title)}</h3><div class="mut">${text}</div><div class="mbtns"><button class="ghost" data-a="closeModal">Annulla</button><button class="${danger?'bad':'pri'}" data-a="confirmOk">${esc(okLabel)}</button></div>`);}
 function download(name,text){const b=new Blob([text],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
@@ -301,6 +304,38 @@ function sirenStop(){
   document.querySelectorAll('.sirenbtn').forEach(b=>b.classList.remove('on'));
 }
 function beep(ms){sirenStart();setTimeout(sirenStop,ms||1600);}
+
+/* =================== TASTI =================== */
+const KEY_ACTIONS=[
+  ['clock','Avvia / ferma cronometro'],
+  ['siren','Sirena (tieni premuto)'],
+  ['plus','Cronometro +1 secondo'],
+  ['minus','Cronometro −1 secondo'],
+  ['arrow','Inverti possesso alternato'],
+  ['toA','Timeout squadra A (casa)'],
+  ['toB','Timeout squadra B (ospite)'],
+  ['endP','Fine periodo'],
+];
+const DEF_KEYS={clock:['Enter','NumpadEnter','Space'],siren:['Numpad0','KeyS'],plus:['NumpadAdd'],minus:['NumpadSubtract'],arrow:['NumpadDecimal','NumpadComma'],toA:[],toB:[],endP:[]};
+function keyMap(){const m={};for(const [a] of KEY_ACTIONS)m[a]=(DB.keys&&Array.isArray(DB.keys[a]))?DB.keys[a]:DEF_KEYS[a].slice();return m;}
+function keyAction(code){if(!code)return null;const m=keyMap();for(const [a] of KEY_ACTIONS)if(m[a].includes(code))return a;return null;}
+function keyLabel(c){
+  const np={NumpadEnter:'Invio',NumpadAdd:'+',NumpadSubtract:'−',NumpadMultiply:'×',NumpadDivide:'÷',NumpadDecimal:'.',NumpadComma:',',NumpadEqual:'='};
+  if(np[c])return 'Tastierino '+np[c];
+  let m=c.match(/^Numpad(\d)$/);if(m)return 'Tastierino '+m[1];
+  m=c.match(/^Key([A-Z])$/);if(m)return m[1];
+  m=c.match(/^Digit(\d)$/);if(m)return m[1];
+  const o={Enter:'Invio',Space:'Spazio',Backspace:'Backspace',Tab:'Tab',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',NumLock:'Bloc Num',Minus:'-',Equal:'=',Period:'.',Comma:',',Slash:'/'};
+  return o[c]||c;
+}
+function assignKey(action,code){
+  if(code==='NumLock'){toast('Bloc Num non si può assegnare: serve al tastierino',true);return;}
+  const m=keyMap();let moved='';
+  for(const [a,l] of KEY_ACTIONS){if(a!==action&&m[a].includes(code)){m[a]=m[a].filter(x=>x!==code);moved=l;}}
+  if(!m[action].includes(code))m[action].push(code);
+  DB.keys=m;save();view.keyCapture=null;closeModal();render();
+  toast(`${keyLabel(code)} → ${KEY_ACTIONS.find(x=>x[0]===action)[1]}`+(moved?` (tolto da “${moved}”)`:''));
+}
 
 /* =================== VIEW STATE =================== */
 const view={screen:'home',sel:null,teamEdit:null,sheetId:null,pending:null};
@@ -432,11 +467,27 @@ SCREENS.home=()=>{
     <button data-a="nav" data-s="archive">📁 Archivio gare<small>${DB.games.length} gare salvate</small></button>
     <button data-a="exportAll">⬇ Backup<small>Esporta tutti i dati (.json)</small></button>
     <button data-a="importAll">⬆ Ripristina<small>Importa un backup .json</small></button>
+    <button data-a="nav" data-s="keys">⌨ Tasti<small>Tastiera / tastierino numerico</small></button>
     ${installPrompt?`<button class="ok" data-a="install">📲 Installa app<small style="color:#14532d">Aggiungi l'icona alla schermata Home</small></button>`:''}
   </div>
   ${!isStandalone()&&!installPrompt&&location.protocol.startsWith('http')?`<p class="mut sm" style="margin-top:16px">Per installarla: menu del browser ⋮ → <b>Installa app</b> / <b>Aggiungi a schermata Home</b> (su iPad: Condividi → Aggiungi alla schermata Home).</p>`:''}
   <p class="mut sm" style="margin-top:24px">I dati sono salvati solo su questo dispositivo/browser. Fai un backup periodico.
-  Durante la gara, da tastiera o tastierino numerico: <b>Invio</b> (o Spazio) avvia/ferma il cronometro · <b>0</b> (o S) tenuto premuto suona la sirena · <b>+</b> / <b>−</b> cronometro ±1 secondo · <b>.</b> inverte il possesso.</p>
+  Con una tastiera o un tastierino numerico collegato puoi comandare cronometro, sirena e altro: vedi <b>⌨ Tasti</b>.</p>
+  </div>`;
+};
+
+/* ----- TASTI ----- */
+SCREENS.keys=()=>{
+  const m=keyMap();
+  return `<div class="wrap">
+  <div class="top"><button class="ghost" data-a="nav" data-s="home">← Menu</button><h1>⌨ Tasti</h1><button class="ghost" data-a="keysReset">Ripristina predefiniti</button></div>
+  <p class="mut sm">Valgono durante la gara, con una tastiera o un tastierino numerico (anche bluetooth) collegato. Premi <b>＋ Assegna</b> e poi il tasto che vuoi usare. Un tasto può fare una sola azione: se era già usato, viene spostato.</p>
+  <div class="card" style="padding:4px 12px">
+  ${KEY_ACTIONS.map(([a,l])=>`<div class="list-item"><div class="grow"><b>${l}</b></div>
+    <div class="row">${m[a].map(c=>`<span class="kchip">${esc(keyLabel(c))}<button data-a="keyDel" data-k="${a}" data-c="${esc(c)}" title="Togli">✕</button></span>`).join('')||'<span class="mut sm">nessun tasto</span>'}
+    <button data-a="keyAdd" data-k="${a}">＋ Assegna</button></div></div>`).join('')}
+  </div>
+  <p class="mut sm">Consiglio: accendi il <b>Bloc Num</b> del tastierino. I tasti funzionano anche con Bloc Num spento, ma alcuni tastierini mandano codici diversi.</p>
   </div>`;
 };
 
@@ -875,6 +926,11 @@ const ACT={
   exportGame:d=>{const g=DB.games.find(x=>x.id===d.id);download(`gara_${g.info.date}_${g.teams[0].name}_${g.teams[1].name}.json`.replace(/[^\w.\-]+/g,'_'),JSON.stringify({teams:[],games:[g]},null,1));},
   exportAll:()=>download(`referto_backup_${today()}.json`,JSON.stringify(DB,null,1)),
   importAll:()=>$('#importFile').click(),
+  keyAdd:d=>{const l=KEY_ACTIONS.find(x=>x[0]===d.k)[1];view.keyCapture=d.k;
+    openModal(`<h3>Premi un tasto</h3><div class="mut">Premi sulla tastiera o sul tastierino il tasto da usare per:<br><b style="color:var(--txt);font-size:18px">${esc(l)}</b></div><div class="keywait">⌨</div><div class="mbtns"><button class="ghost" data-a="keyCancel">Annulla (Esc)</button></div>`);},
+  keyCancel:()=>{view.keyCapture=null;closeModal();},
+  keyDel:d=>{const m=keyMap();m[d.k]=m[d.k].filter(x=>x!==d.c);DB.keys=m;save();render();},
+  keysReset:()=>ask('Ripristinare i tasti predefiniti?','Invio/Spazio cronometro · Tastierino 0 o S sirena · Tastierino + e − ±1 secondo · Tastierino . possesso.','Ripristina',()=>{DB.keys=null;save();render();toast('Tasti predefiniti ripristinati');}),
   install:async()=>{if(!installPrompt)return;installPrompt.prompt();try{await installPrompt.userChoice;}catch(e){}installPrompt=null;render();},
   reload:()=>location.reload(),
 };
@@ -921,24 +977,29 @@ document.addEventListener('pointerdown',e=>{if(e.target.closest('[data-siren]'))
 ['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,()=>sirenStop()));
 document.addEventListener('pointerleave',e=>{if(e.target.closest&&e.target.closest('[data-siren]'))sirenStop();},true);
 document.addEventListener('contextmenu',e=>{if(e.target.closest('[data-siren]'))e.preventDefault();});
-/* tastierino numerico: 0 (tieni premuto) sirena, + / − cronometro ±1 s, . (o ,) inverte il possesso */
-const SIREN_KEYS=['KeyS','Numpad0'];
-document.addEventListener('keyup',e=>{if(SIREN_KEYS.includes(e.code))sirenStop();});
+/* tasti configurabili (schermata ⌨ Tasti) */
 window.addEventListener('blur',()=>sirenStop());
+document.addEventListener('keyup',e=>{if(keyAction(e.code)==='siren')sirenStop();});
 document.addEventListener('keydown',e=>{
+  // assegnazione di un tasto in corso
+  if(view.keyCapture){e.preventDefault();
+    if(e.code==='Escape'){view.keyCapture=null;closeModal();return;}
+    if(!e.code)return;
+    assignKey(view.keyCapture,e.code);return;}
   const liveFree=view.screen==='live'&&!$('#modal').innerHTML&&e.target.tagName!=='INPUT';
-  if(liveFree&&SIREN_KEYS.includes(e.code)){e.preventDefault();if(!e.repeat)sirenStart();return;}
-  if(liveFree&&(e.code==='NumpadAdd'||e.code==='NumpadSubtract')){e.preventDefault();ACT.clk({d:e.code==='NumpadAdd'?'1':'-1'});return;}
-  if(liveFree&&(e.code==='NumpadDecimal'||e.code==='NumpadComma')){e.preventDefault();if(e.repeat)return;
-    const g=cur();if(g.arrow==null){toast('Assegna prima il possesso toccando la freccia ◀ o ▶');return;}ACT.arrow({t:String(g.arrow)});return;}
-  if(view.screen!=='live'||$('#modal').innerHTML) { if(e.key==='Enter'&&$('#clkIn'))ACT.clkSet(); if(e.key==='Escape')closeModal(); return; }
-  if(e.target.tagName==='INPUT') return;
-  // Spazio o Invio (anche Invio del tastierino numerico bluetooth): avvia/ferma il cronometro
-  if(e.code==='Space'||e.key==='Enter'||e.code==='NumpadEnter'){
-    e.preventDefault(); // evita che Invio "clicchi" il pulsante toccato per ultimo
-    if(document.activeElement&&document.activeElement!==document.body)document.activeElement.blur();
-    if(!e.repeat)clockToggle();
-  }
+  if(!liveFree){ if(e.key==='Enter'&&$('#clkIn'))ACT.clkSet(); if(e.key==='Escape')closeModal(); return; }
+  const a=keyAction(e.code); if(!a) return;
+  e.preventDefault(); // evita che Invio/Spazio "clicchino" il pulsante toccato per ultimo
+  if(document.activeElement&&document.activeElement!==document.body)document.activeElement.blur();
+  const g=cur();
+  if(a==='plus'||a==='minus'){ACT.clk({d:a==='plus'?'1':'-1'});return;}
+  if(e.repeat)return;
+  if(a==='clock')clockToggle();
+  else if(a==='siren')sirenStart();
+  else if(a==='arrow'){if(g.arrow==null){toast('Assegna prima il possesso toccando la freccia ◀ o ▶');return;}ACT.arrow({t:String(g.arrow)});}
+  else if(a==='toA')ACT.timeout({t:'0'});
+  else if(a==='toB')ACT.timeout({t:'1'});
+  else if(a==='endP')ACT.endPeriod();
 });
 $('#importFile').addEventListener('change',e=>{
   const f=e.target.files[0]; if(!f) return; const r=new FileReader();
