@@ -42,7 +42,7 @@ table.ed td.c{text-align:center}
 .home-btns button{padding:26px 18px;font-size:20px;text-align:left;border-radius:16px}
 .home-btns button small{display:block;font-size:13px;color:var(--mut);margin-top:6px}
 .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--line)}
-.badge.live{background:var(--ok);color:#052e16} .badge.end{background:var(--mut);color:#0f172a}
+.badge.live{background:var(--ok);color:#052e16;display:inline-block;height:auto;overflow:visible} .badge.end{background:var(--mut);color:#0f172a}
 .list-item{display:flex;gap:10px;align-items:center;padding:12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .list-item .grow{flex:1;min-width:200px}
 .cnt{font-size:13px;padding:3px 9px;border-radius:99px;background:var(--line)} .cnt.ok{background:var(--ok);color:#052e16} .cnt.bad{background:var(--bad)}
@@ -171,6 +171,15 @@ table.ed td.c{text-align:center}
 .bto{position:absolute;left:50%;bottom:4vh;transform:translateX(-50%);white-space:nowrap;max-width:94vw;overflow:hidden;font-size:6vh;font-weight:900;padding:1.5vh 3vw;border-radius:2vh;letter-spacing:.05em;box-shadow:0 0 6vh rgba(0,0,0,.8)}
 .bto.t0{background:var(--a2)} .bto.t1{background:var(--b2)}
 .bto b{font-size:8vh;margin-left:1.5vw;font-variant-numeric:tabular-nums}
+.bads{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border-radius:2vh;overflow:hidden;background:#000}
+.bads img{max-width:100%;max-height:100%;object-fit:contain;display:block;animation:adin .6s ease}
+.btoc{display:flex;align-items:center;gap:1.5vw;padding:0 2vw;border-radius:2vh;height:12vh;max-width:42vw}
+.btoc.t0{background:var(--a2)} .btoc.t1{background:var(--b2)}
+.btoc em{font-style:normal;font-size:3.4vh;font-weight:900;letter-spacing:.15em;display:flex;flex-direction:column;min-width:0;line-height:1.1}
+.btoc em small{font-size:2.6vh;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;opacity:.9}
+.btoc b{font-size:10vh;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;min-width:2ch;text-align:right}
+@keyframes adin{from{opacity:0}to{opacity:1}}
+.adthumb{width:150px;height:56px;object-fit:contain;background:#000;border-radius:6px;flex-shrink:0}
 
 /* modal + toast */
 #modal:empty{display:none}
@@ -289,6 +298,7 @@ table.ed td.c{text-align:center}
 <div id="modal"></div>
 <div id="toast"></div>
 <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+<input type="file" id="adFile" accept="image/*" multiple style="display:none">
 <script>
 'use strict';
 /* =================== STORAGE =================== */
@@ -306,6 +316,17 @@ function save(){
   if(DISPLAY)return;
   try{localStorage.setItem(LS,JSON.stringify(DB));}catch(e){if(!saveWarned){saveWarned=true;toast('Attenzione: questo browser non permette il salvataggio. Usa Chrome/Edge aprendo il file direttamente.',true);}}
 }
+/* banner pubblicitari: salvati a parte (immagini pesanti), letti anche dalla finestra tabellone */
+const ADS_LS='refertoBasket_ads',ADS_NEXT='refertoBasket_adNext';
+function loadAds(){try{const a=JSON.parse(localStorage.getItem(ADS_LS));if(a&&Array.isArray(a.list))return a;}catch(e){}return{on:true,sec:15,list:[]};}
+let ADS=loadAds();
+function saveAds(){try{localStorage.setItem(ADS_LS,JSON.stringify(ADS));return true;}
+  catch(e){toast('Spazio esaurito: elimina qualche banner o usa immagini più leggere',true);return false;}}
+function imgToData(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{const k=Math.min(1,1920/im.width,1080/im.height),c=document.createElement('canvas');
+    c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);const x=c.getContext('2d');
+    x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.82));};
+  im.onerror=()=>{URL.revokeObjectURL(u);rej();};im.src=u;});}
 
 /* =================== UTILS =================== */
 const $=s=>document.querySelector(s);
@@ -529,17 +550,29 @@ function renderBoard(){
     return `<div class="bteam t${ti}"><div class="bname">${esc(t.name)}</div><div class="bscore">${t.score}</div>
     <div class="bfouls">FALLI <b>${t.tf}</b>${t.tf>=4?' <span class="bbonus">BONUS</span>':''}</div>
     ${lim?`<div class="btos"><em>TIMEOUT</em>${tod}</div>`:''}</div>`;};
+  const ad=adIndex();adShown=ad;const toLeft=b.to?Math.ceil(Math.max(0,(b.to.end-Date.now())/1000)):0;
   const pdots=n=>{let h='';for(let i=0;i<5;i++)h+=`<i class="${i<n?(n>=4?'f f4':'f'):''}"></i>`;return h;};
   const five=(ti)=>`<div class="bfive t${ti}">${b.teams[ti].five.map(p=>`<div class="bp ${p.f>=5?'out':''}"><b>${esc(p.num)}</b><span>${esc(p.last)}</span><em class="bpts">${p.p||0}</em><div class="bpf">${pdots(p.f||0)}</div></div>`).join('')}</div>`;
   $('#app').innerHTML=`<div class="board">
     <div class="bper">${esc(b.per)}${b.finished?' · FINALE':''}</div>
     <div class="btop">${team(0)}
       <div class="bmid"><div class="bclock ${b.running?'run':''}" id="bclock">${fmtClock(boardClock())}</div>
-        <div class="barrow"><span class="${b.arrow===0?'on t0':''}">◀</span><em>POSSESSO</em><span class="${b.arrow===1?'on t1':''}">▶</span></div></div>
+        ${b.to?`<div class="btoc t${b.to.team}"><em>TIMEOUT<small>${esc(b.teams[b.to.team].name)}</small></em><b id="bto">${toLeft}</b></div>`
+        :`<div class="barrow"><span class="${b.arrow===0?'on t0':''}">◀</span><em>POSSESSO</em><span class="${b.arrow===1?'on t1':''}">▶</span></div>`}</div>
       ${team(1)}</div>
-    <div class="bfives">${five(0)}${five(1)}</div>
-    ${b.to?`<div class="bto t${b.to.team}">TIMEOUT ${esc(b.teams[b.to.team].name)} <b id="bto">${Math.ceil(Math.max(0,(b.to.end-Date.now())/1000))}</b></div>`:''}
+    ${ad>=0?`<div class="bads" id="bads"><img src="${ADS.list[ad].img}" alt=""></div>`:`<div class="bfives">${five(0)}${five(1)}</div>`}
   </div>`;
+}
+/* durante il timeout: un banner ogni ADS.sec secondi, al posto dei giocatori in campo.
+   La rotazione prosegue da un timeout all'altro, così tutti gli sponsor girano. */
+let adRun=null,adShown=-1;
+function adIndex(){
+  const b=board;if(!b||b.none||!b.to||b.to.end<=Date.now()){adRun=null;return -1;}
+  if(!adRun||adRun.end!==b.to.end){ADS=loadAds();adRun={end:b.to.end,start:Date.now(),i0:+localStorage.getItem(ADS_NEXT)||0,k:-1};}
+  const n=ADS.list.length;if(!ADS.on||!n)return -1;
+  const k=Math.floor((Date.now()-adRun.start)/((ADS.sec||15)*1000)),i=(adRun.i0+k)%n;
+  if(k!==adRun.k){adRun.k=k;try{localStorage.setItem(ADS_NEXT,String((i+1)%n));}catch(e){}}
+  return i;
 }
 if(DISPLAY){
   document.title='Tabellone';
@@ -551,6 +584,7 @@ if(DISPLAY){
   setInterval(()=>{
     const el=document.getElementById('bclock');if(el){el.textContent=fmtClock(boardClock());el.classList.toggle('run',!!(board&&board.running));}
     const to=document.getElementById('bto');if(to&&board&&board.to)to.textContent=Math.ceil(Math.max(0,(board.to.end-Date.now())/1000));
+    if(board&&!board.none&&adIndex()!==adShown)renderBoard(); // cambio banner / fine timeout
     if(board&&!board.none&&Date.now()-boardRx>6000){board={none:true};renderBoard();} // tavolo chiuso
   },100);
   document.addEventListener('click',()=>{const el=document.documentElement;try{if(!document.fullscreenElement)(el.requestFullscreen||el.webkitRequestFullscreen).call(el);}catch(e){}});
@@ -572,6 +606,7 @@ SCREENS.home=()=>{
     <button data-a="exportAll">⬇ Backup<small>Esporta tutti i dati (.json)</small></button>
     <button data-a="importAll">⬆ Ripristina<small>Importa un backup .json</small></button>
     <button data-a="nav" data-s="keys">⌨ Tasti<small>Tastiera / tastierino numerico</small></button>
+    <button data-a="nav" data-s="ads">📢 Pubblicità<small>${ADS.list.length} banner · nel tabellone durante i timeout</small></button>
     ${installPrompt?`<button class="ok" data-a="install">📲 Installa app<small style="color:#14532d">Aggiungi l'icona alla schermata Home</small></button>`:''}
   </div>
   ${!isStandalone()&&!installPrompt&&location.protocol.startsWith('http')?`<p class="mut sm" style="margin-top:16px">Per installarla: menu del browser ⋮ → <b>Installa app</b> / <b>Aggiungi a schermata Home</b> (su iPad: Condividi → Aggiungi alla schermata Home).</p>`:''}
@@ -592,6 +627,31 @@ SCREENS.keys=()=>{
     <button data-a="keyAdd" data-k="${a}">＋ Assegna</button></div></div>`).join('')}
   </div>
   <p class="mut sm">Consiglio: accendi il <b>Bloc Num</b> del tastierino. I tasti funzionano anche con Bloc Num spento, ma alcuni tastierini mandano codici diversi.</p>
+  </div>`;
+};
+
+/* ----- PUBBLICITÀ ----- */
+const AD_SIZE='1920 × 450';
+SCREENS.ads=()=>{
+  const L=ADS.list;let kb=0;try{kb=Math.round((localStorage.getItem(ADS_LS)||'').length/1024);}catch(e){}
+  return `<div class="wrap">
+  <div class="top"><button class="ghost" data-a="nav" data-s="home">← Menu</button><h1>📢 Pubblicità</h1><button class="pri" data-a="adAdd">＋ Aggiungi banner</button></div>
+  <p class="mut sm">Quando una squadra chiama timeout, sul <b>tabellone</b> il conto alla rovescia prende il posto del possesso e, al posto dei giocatori in campo, scorrono questi banner: uno ogni ${ADS.sec||15} secondi, nell'ordine della lista. Al timeout successivo si riparte dal banner seguente, così girano tutti.</p>
+  <div class="card row" style="justify-content:space-between">
+    <div><b>Banner durante i timeout</b><div class="mut sm">${ADS.on?'Attivi':'Disattivati: durante i timeout il tabellone mostra i giocatori'}</div></div>
+    <button class="${ADS.on?'ok':''}" data-a="adToggle">${ADS.on?'✓ Attivi':'Disattivati'}</button>
+  </div>
+  <div class="card row" style="justify-content:space-between">
+    <div><b>Durata di ogni banner</b><div class="mut sm">Un timeout dura 60 secondi</div></div>
+    <div class="row">${[10,15,20,30].map(s=>`<button class="${(ADS.sec||15)===s?'pri':''}" data-a="adSec" data-s="${s}">${s}s</button>`).join('')}</div>
+  </div>
+  <div class="card" style="padding:4px 12px">
+  ${L.length?L.map((a,i)=>`<div class="list-item"><img class="adthumb" src="${a.img}" alt=""><div class="grow"><b>${esc(a.name||('Banner '+(i+1)))}</b></div>
+    <div class="row"><button data-a="adMove" data-i="${i}" data-d="-1" ${i?'':'disabled'}>▲</button><button data-a="adMove" data-i="${i}" data-d="1" ${i<L.length-1?'':'disabled'}>▼</button><button class="bad" data-a="adDel" data-i="${i}">✕</button></div></div>`).join('')
+  :'<p class="mut">Nessun banner. Premi <b>＋ Aggiungi banner</b> e scegli una o più immagini (JPG o PNG).</p>'}
+  </div>
+  <p class="mut sm"><b>Formato consigliato: ${AD_SIZE} pixel</b> (rettangolo largo e basso, proporzione circa 4,3 : 1), JPG o PNG. Immagini di altre misure vanno bene lo stesso: vengono mostrate intere, con bordi neri ai lati o sopra e sotto.
+  I banner restano salvati su questo dispositivo (spazio usato: ${kb} KB, il browser ne concede circa 5000 in tutto) e non sono inclusi nel backup.</p>
   </div>`;
 };
 
@@ -1039,6 +1099,11 @@ const ACT={
   keysReset:()=>ask('Ripristinare i tasti predefiniti?','Invio/Spazio cronometro · Tastierino 0 o S sirena · Tastierino + e − ±1 secondo · Tastierino . possesso.','Ripristina',()=>{DB.keys=null;save();render();toast('Tasti predefiniti ripristinati');}),
   install:async()=>{if(!installPrompt)return;installPrompt.prompt();try{await installPrompt.userChoice;}catch(e){}installPrompt=null;render();},
   reload:()=>location.reload(),
+  adAdd:()=>$('#adFile').click(),
+  adToggle:()=>{ADS.on=!ADS.on;saveAds();render();},
+  adSec:d=>{ADS.sec=+d.s;saveAds();render();},
+  adMove:d=>{const i=+d.i,j=i+ +d.d,L=ADS.list;if(j<0||j>=L.length)return;[L[i],L[j]]=[L[j],L[i]];saveAds();render();},
+  adDel:d=>{const a=ADS.list[+d.i];ask('Eliminare questo banner?',esc(a.name||''),'Elimina',()=>{ADS.list.splice(+d.i,1);saveAds();render();},true);},
 };
 
 /* =================== PWA =================== */
@@ -1106,6 +1171,15 @@ document.addEventListener('keydown',e=>{
   else if(a==='toA')ACT.timeout({t:'0'});
   else if(a==='toB')ACT.timeout({t:'1'});
   else if(a==='endP')ACT.endPeriod();
+});
+$('#adFile').addEventListener('change',async e=>{
+  const files=[...e.target.files];e.target.value='';let ok=0;
+  for(const f of files){
+    try{const img=await imgToData(f);ADS.list.push({id:Date.now().toString(36)+ok,name:f.name.replace(/\.[^.]+$/,''),img});
+      if(!saveAds()){ADS.list.pop();break;}ok++;}
+    catch(err){toast(`Impossibile leggere ${f.name}`,true);}
+  }
+  if(ok)toast(ok===1?'Banner aggiunto':`${ok} banner aggiunti`);render();
 });
 $('#importFile').addEventListener('change',e=>{
   const f=e.target.files[0]; if(!f) return; const r=new FileReader();
