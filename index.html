@@ -153,15 +153,16 @@ table.ed td.c{text-align:center}
 .barrow span{font-size:12vh;line-height:1;color:#1e293b;font-weight:900}
 .barrow span.on.t0{color:var(--a)} .barrow span.on.t1{color:var(--b)}
 .barrow em{font-style:normal;font-size:3vh;font-weight:900;letter-spacing:.2em;color:#94a3b8}
-.bfives{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:2vw;min-height:0}
+.bfives{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2vw;min-height:0}
 .bfive{display:grid;grid-auto-rows:minmax(0,1fr);gap:1vh;min-height:0;border-radius:2vh;padding:1.5vh 1.5vw;background:#0b1222}
 .bfive.t0{border-left:1vh solid var(--a)} .bfive.t1{border-left:1vh solid var(--b)}
-.bp{display:flex;align-items:center;gap:2vw;font-size:5vh;font-weight:700;min-height:0}
-.bp b{font-size:6.5vh;font-weight:900;min-width:9vw;text-align:center;border-radius:1vh;background:#1e293b}
+.bp{display:flex;align-items:center;gap:1.2vw;min-width:0;font-size:5vh;font-weight:700;min-height:0}
+.bp b{font-size:6.5vh;font-weight:900;min-width:7vw;text-align:center;border-radius:1vh;background:#1e293b}
 .bp span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
-.bpf{display:flex;gap:.8vh;flex-shrink:0}
-.bpf i{width:3.4vh;height:3.4vh;border-radius:50%;border:.45vh solid #475569;display:block}
+.bpf{display:flex;gap:.5vh;flex-shrink:0}
+.bpf i{width:3vh;height:3vh;border-radius:50%;border:.4vh solid #475569;display:block}
 .bpf i.f{background:var(--warn);border-color:var(--warn)} .bpf i.f4{background:var(--bad);border-color:var(--bad)}
+.bpts{font-style:normal;font-size:6.5vh;font-weight:900;min-width:4.5vw;text-align:right;font-variant-numeric:tabular-nums;color:#fde68a;flex-shrink:0}
 .bp.out span{text-decoration:line-through;color:#f87171}
 .btos{display:flex;align-items:center;gap:1vh;margin-top:1vh}
 .btos em{font-style:normal;font-size:2.6vh;font-weight:800;letter-spacing:.1em;color:#94a3b8;margin-right:.6vh}
@@ -510,7 +511,7 @@ function boardState(){
     to:g.toTimer?{team:g.toTimer.team,end:g.toTimer.end}:null,
     teams:[0,1].map(ti=>{const t=g.teams[ti];return{name:t.name,score:s.score[ti],tf:curTeamFouls(g,s,ti),
       toUsed:s.to[ti].filter(e=>toSeg(e.period)===toSeg(g.period)).length,toLim:toLimit(g.period),
-      five:[...s.on[ti]].sort((a,b)=>numSort(t.players[a],t.players[b])).map(i=>({num:t.players[i].num,last:t.players[i].last,f:s.pf[ti][i].length}))};})};
+      five:[...s.on[ti]].sort((a,b)=>numSort(t.players[a],t.players[b])).map(i=>({num:t.players[i].num,last:t.players[i].last,p:s.pp[ti][i]||0,f:s.pf[ti][i].length}))};})};
 }
 let bcLast=0;
 function bcast(){if(!BC||DISPLAY)return;bcLast=Date.now();try{BC.postMessage(boardState());}catch(e){}}
@@ -529,7 +530,7 @@ function renderBoard(){
     <div class="bfouls">FALLI <b>${t.tf}</b>${t.tf>=4?' <span class="bbonus">BONUS</span>':''}</div>
     ${lim?`<div class="btos"><em>TIMEOUT</em>${tod}</div>`:''}</div>`;};
   const pdots=n=>{let h='';for(let i=0;i<5;i++)h+=`<i class="${i<n?(n>=4?'f f4':'f'):''}"></i>`;return h;};
-  const five=(ti)=>`<div class="bfive t${ti}">${b.teams[ti].five.map(p=>`<div class="bp ${p.f>=5?'out':''}"><b>${esc(p.num)}</b><span>${esc(p.last)}</span><div class="bpf">${pdots(p.f||0)}</div></div>`).join('')}</div>`;
+  const five=(ti)=>`<div class="bfive t${ti}">${b.teams[ti].five.map(p=>`<div class="bp ${p.f>=5?'out':''}"><b>${esc(p.num)}</b><span>${esc(p.last)}</span><em class="bpts">${p.p||0}</em><div class="bpf">${pdots(p.f||0)}</div></div>`).join('')}</div>`;
   $('#app').innerHTML=`<div class="board">
     <div class="bper">${esc(b.per)}${b.finished?' · FINALE':''}</div>
     <div class="btop">${team(0)}
