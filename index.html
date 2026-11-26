@@ -78,6 +78,8 @@ table.ed td.c{text-align:center}
 .sirenbtn.on{background:#ef4444;color:#fff;box-shadow:0 0 24px #ef4444}
 .tobanner{position:relative;display:flex;align-items:center;justify-content:center;gap:24px;padding:8px 16px 12px;color:#fff;overflow:hidden}
 .tobanner.t0{background:var(--a2)} .tobanner.t1{background:var(--b2)}
+.tobanner.iv{background:#713f12} .tobanner.iv .tonum{min-width:190px}
+.ivrow.sug{background:rgba(59,130,246,.15);border-radius:10px;padding:4px 6px;margin:-4px -6px}
 .tobanner .tolbl{display:flex;flex-direction:column;font-size:14px;font-weight:900;letter-spacing:.15em;line-height:1.2}
 .tobanner .tolbl b{font-size:20px;letter-spacing:0}
 .tobanner .tonum{font-size:64px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;min-width:110px;text-align:center}
@@ -149,6 +151,8 @@ table.ed td.c{text-align:center}
 .bmid{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vh}
 .bclock{font-size:20vh;font-weight:900;font-variant-numeric:tabular-nums;line-height:1;color:#f87171;padding:1vh 2vw;border-radius:2vh;background:#1a0505;border:.5vh solid #7f1d1d;min-width:42vw;text-align:center}
 .bclock.run{color:#4ade80;background:#03170a;border-color:#166534}
+.bclock.iv{color:#facc15;background:#1a1405;border-color:#854d0e}
+.bivl{font-size:4.4vh;font-weight:900;letter-spacing:.15em;color:#facc15;text-align:center;height:12vh;display:flex;align-items:center}
 .barrow{display:flex;align-items:center;gap:1.5vw}
 .barrow span{font-size:12vh;line-height:1;color:#1e293b;font-weight:900}
 .barrow span.on.t0{color:var(--a)} .barrow span.on.t1{color:var(--b)}
@@ -480,7 +484,7 @@ function addEv(e){
 /* =================== CLOCK =================== */
 let lastTick=0, saveTick=0, wakeLock=null;
 setInterval(()=>{
-  const g=cur(); if(g&&g.toTimer) toTick(g);
+  const g=cur(); if(g&&g.toTimer) toTick(g); if(g&&g.ivTimer) ivTick(g);
   if(!g||!g.running) return;
   const now=performance.now(); g.clock-=(now-lastTick)/1000; lastTick=now;
   if(g.clock<=0){g.clock=0;g.running=false;save();beep();render();toast(`Fine ${perLong(g.period).toLowerCase()}`);return;}
@@ -506,10 +510,40 @@ function toBannerHTML(g){
     <div class="toprog"><i id="toBar" style="width:${left/TO_SEC*100}%"></i></div>
   </div>`;
 }
+/* timer intervallo (prima della gara, tra i quarti, intervallo lungo): durate impostabili.
+   Prima della gara e all'intervallo lungo: sirena breve a 3:00 e a 1:30 dalla fine (FIBA). */
+const IV_KINDS=[['pre','Prima della gara',20,1],['pre3','3 minuti all’inizio',3,1],['q','Tra i quarti',2,0],['half','Intervallo lungo',15,1],['alt','Altro',5,0]];
+const IV_LBL={pre:'INIZIO GARA TRA',pre3:'INIZIO GARA TRA',q:'INTERVALLO',half:'INTERVALLO LUNGO',alt:'INTERVALLO'};
+function ivMin(k){const d=IV_KINDS.find(x=>x[0]===k);return (DB.intv&&DB.intv[k])||d[2];}
+function ivLeft(g){return Math.max(0,(g.ivTimer.end-Date.now())/1000);}
+function ivTick(g){
+  const t=g.ivTimer,left=ivLeft(g);
+  if(t.warn){if(!t.w3&&t.dur>180&&left<=180){t.w3=true;save();beep(700);}if(!t.w90&&t.dur>90&&left<=90){t.w90=true;save();beep(700);}}
+  if(left<=0){g.ivTimer=null;save();beep(1600);toast('Fine intervallo');bcast();if(view.screen==='live')render();return;}
+  const el=document.getElementById('ivTime');if(el){el.textContent=fmtMS(Math.ceil(left));el.parentElement.classList.toggle('warn',left<=30);}
+  const bar=document.getElementById('ivBar');if(bar)bar.style.width=(left/t.dur*100)+'%';
+}
+function ivBannerHTML(g){
+  const t=g.ivTimer,left=ivLeft(g);
+  return `<div class="tobanner iv ${left<=30?'warn':''}">
+    <div class="tolbl">⏱ ${esc(IV_LBL[t.k]||'INTERVALLO')}${t.name.toUpperCase()!==(IV_LBL[t.k]||'')?`<b>${esc(t.name)}</b>`:''}</div>
+    <div class="tonum" id="ivTime">${fmtMS(Math.ceil(left))}</div>
+    <div class="row"><button data-a="ivAdj" data-d="-60">−1′</button><button data-a="ivAdj" data-d="60">+1′</button><button data-a="ivEnd">Termina</button></div>
+    <div class="toprog"><i id="ivBar" style="width:${left/t.dur*100}%"></i></div>
+  </div>`;
+}
+function ivOpen(sug){
+  openModal(`<h3>⏱ Timer intervallo</h3>
+    <div class="mut sm" style="margin-bottom:8px">Imposta i minuti e premi <b>Avvia</b>. Il conto alla rovescia compare qui e sul tabellone; alla fine suona la sirena. Prima della gara e all'intervallo lungo suona anche a 3:00 e a 1:30 dalla fine. Avviando il cronometro di gara l'intervallo si chiude.</div>
+    <div style="display:grid;gap:8px">${IV_KINDS.map(([k,l])=>`<div class="row ivrow ${k===sug?'sug':''}"><b style="flex:1">${l}</b>
+      <input type="number" id="iv_${k}" min="0.5" max="99" step="0.5" value="${ivMin(k)}" style="width:80px;text-align:center"> <span class="mut">min</span>
+      <button class="${k===sug?'pri':''}" data-a="ivStart" data-k="${k}">▶ Avvia</button></div>`).join('')}</div>
+    <div class="mbtns"><button class="ghost" data-a="closeModal">Chiudi</button></div>`);
+}
 function updClock(){bcastSoon();const g=cur();const el=document.getElementById('clock');if(!g||!el)return;el.textContent=fmtClock(g.clock);el.classList.toggle('run',!!g.running);}
 function clockToggle(){const g=cur();if(!g||g.status!=='live')return;if(!g.running&&g.clock<=0){toast('Tempo scaduto: chiudi il periodo');return;}try{audio();}catch(e){}
   g.running=!g.running;lastTick=performance.now();
-  if(g.running&&g.toTimer){g.toTimer=null;save();render();return;} // ripresa del gioco: chiude il timeout
+  if(g.running&&(g.toTimer||g.ivTimer)){g.toTimer=null;g.ivTimer=null;save();render();return;} // ripresa del gioco: chiude timeout/intervallo
   save();updClock();}
 async function keepAwake(){try{if('wakeLock' in navigator&&!wakeLock){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&view.screen==='live')keepAwake();});
@@ -532,6 +566,7 @@ function boardState(){
   const s=stats(g);
   return {t:Date.now(),per:perLong(g.period),clock:g.clock,running:!!g.running,arrow:g.arrow,finished:g.status==='finished',
     to:g.toTimer?{team:g.toTimer.team,end:g.toTimer.end}:null,
+    iv:g.ivTimer?{lbl:IV_LBL[g.ivTimer.k]||'INTERVALLO',end:g.ivTimer.end}:null,
     teams:[0,1].map(ti=>{const t=g.teams[ti];return{name:t.name,score:s.score[ti],tf:curTeamFouls(g,s,ti),
       toUsed:s.to[ti].filter(e=>toSeg(e.period)===toSeg(g.period)).length,toLim:toLimit(g.period),
       five:[...s.on[ti]].sort((a,b)=>numSort(t.players[a],t.players[b])).map(i=>({num:t.players[i].num,last:t.players[i].last,p:s.pp[ti][i]||0,f:s.pf[ti][i].length}))};})};
@@ -558,19 +593,19 @@ function renderBoard(){
   $('#app').innerHTML=`<div class="board">
     <div class="bper">${esc(b.per)}${b.finished?' · FINALE':''}</div>
     <div class="btop">${team(0)}
-      <div class="bmid"><div class="bclock ${b.running?'run':''}" id="bclock">${fmtClock(boardClock())}</div>
-        ${b.to?`<div class="btoc t${b.to.team}"><em>TIMEOUT<small>${esc(b.teams[b.to.team].name)}</small></em><b id="bto">${toLeft}</b></div>`
+      <div class="bmid"><div class="bclock ${b.iv?'iv':b.running?'run':''}" id="bclock">${b.iv?fmtMS((b.iv.end-Date.now())/1000):fmtClock(boardClock())}</div>
+        ${b.iv?`<div class="bivl">${esc(b.iv.lbl)}</div>`:b.to?`<div class="btoc t${b.to.team}"><em>TIMEOUT<small>${esc(b.teams[b.to.team].name)}</small></em><b id="bto">${toLeft}</b></div>`
         :`<div class="barrow"><span class="${b.arrow===0?'on t0':''}">◀</span><em>POSSESSO</em><span class="${b.arrow===1?'on t1':''}">▶</span></div>`}</div>
       ${team(1)}</div>
     ${ad>=0?`<div class="bads" id="bads"><img src="${ADS.list[ad].img}" alt=""></div>`:`<div class="bfives">${five(0)}${five(1)}</div>`}
   </div>`;
 }
-/* durante il timeout: un banner ogni ADS.sec secondi, al posto dei giocatori in campo.
+/* durante timeout e intervalli: un banner ogni ADS.sec secondi, al posto dei giocatori in campo.
    La rotazione prosegue da un timeout all'altro, così tutti gli sponsor girano. */
 let adRun=null,adShown=-1;
 function adIndex(){
-  const b=board;if(!b||b.none||!b.to||b.to.end<=Date.now()){adRun=null;return -1;}
-  if(!adRun||adRun.end!==b.to.end){ADS=loadAds();adRun={end:b.to.end,start:Date.now(),i0:+localStorage.getItem(ADS_NEXT)||0,k:-1};}
+  const b=board,w=b&&!b.none&&(b.to||b.iv);if(!w||w.end<=Date.now()){adRun=null;return -1;}
+  if(!adRun||adRun.end!==w.end){ADS=loadAds();adRun={end:w.end,start:Date.now(),i0:+localStorage.getItem(ADS_NEXT)||0,k:-1};}
   const n=ADS.list.length;if(!ADS.on||!n)return -1;
   const k=Math.floor((Date.now()-adRun.start)/((ADS.sec||15)*1000)),i=(adRun.i0+k)%n;
   if(k!==adRun.k){adRun.k=k;try{localStorage.setItem(ADS_NEXT,String((i+1)%n));}catch(e){}}
@@ -584,7 +619,7 @@ if(DISPLAY){
       if(!prev||strip(prev)!==strip(board))renderBoard();}};
     BC.postMessage('hello');}
   setInterval(()=>{
-    const el=document.getElementById('bclock');if(el){el.textContent=fmtClock(boardClock());el.classList.toggle('run',!!(board&&board.running));}
+    const el=document.getElementById('bclock');if(el){const iv=board&&board.iv;el.textContent=iv?fmtMS((iv.end-Date.now())/1000):fmtClock(boardClock());el.classList.toggle('iv',!!iv);el.classList.toggle('run',!iv&&!!(board&&board.running));}
     const to=document.getElementById('bto');if(to&&board&&board.to)to.textContent=Math.ceil(Math.max(0,(board.to.end-Date.now())/1000));
     if(board&&!board.none&&adIndex()!==adShown)renderBoard(); // cambio banner / fine timeout
     if(board&&!board.none&&Date.now()-boardRx>6000){board={none:true};renderBoard();} // tavolo chiuso
@@ -608,7 +643,7 @@ SCREENS.home=()=>{
     <button data-a="exportAll">⬇ Backup<small>Esporta tutti i dati (.json)</small></button>
     <button data-a="importAll">⬆ Ripristina<small>Importa un backup .json</small></button>
     <button data-a="nav" data-s="keys">⌨ Tasti<small>Tastiera / tastierino numerico</small></button>
-    <button data-a="nav" data-s="ads">📢 Pubblicità<small>${ADS.list.length} banner · nel tabellone durante i timeout</small></button>
+    <button data-a="nav" data-s="ads">📢 Pubblicità<small>${ADS.list.length} banner · nel tabellone durante timeout e intervalli</small></button>
     ${installPrompt?`<button class="ok" data-a="install">📲 Installa app<small style="color:#14532d">Aggiungi l'icona alla schermata Home</small></button>`:''}
   </div>
   ${!isStandalone()&&!installPrompt&&location.protocol.startsWith('http')?`<p class="mut sm" style="margin-top:16px">Per installarla: menu del browser ⋮ → <b>Installa app</b> / <b>Aggiungi a schermata Home</b> (su iPad: Condividi → Aggiungi alla schermata Home).</p>`:''}
@@ -638,9 +673,9 @@ SCREENS.ads=()=>{
   const L=ADS.list;let kb=0;try{kb=Math.round((localStorage.getItem(ADS_LS)||'').length/1024);}catch(e){}
   return `<div class="wrap">
   <div class="top"><button class="ghost" data-a="nav" data-s="home">← Menu</button><h1>📢 Pubblicità</h1><button class="pri" data-a="adAdd">＋ Aggiungi banner</button></div>
-  <p class="mut sm">Quando una squadra chiama timeout, sul <b>tabellone</b> il conto alla rovescia prende il posto del possesso e, al posto dei giocatori in campo, scorrono questi banner: uno ogni ${ADS.sec||15} secondi, nell'ordine della lista. Al timeout successivo si riparte dal banner seguente, così girano tutti.</p>
+  <p class="mut sm">Quando una squadra chiama timeout, e durante gli intervalli avviati con <b>⏱ Intervallo</b>, sul <b>tabellone</b> il conto alla rovescia prende il posto del possesso e, al posto dei giocatori in campo, scorrono questi banner: uno ogni ${ADS.sec||15} secondi, nell'ordine della lista. Al timeout successivo si riparte dal banner seguente, così girano tutti.</p>
   <div class="card row" style="justify-content:space-between">
-    <div><b>Banner durante i timeout</b><div class="mut sm">${ADS.on?'Attivi':'Disattivati: durante i timeout il tabellone mostra i giocatori'}</div></div>
+    <div><b>Banner durante timeout e intervalli</b><div class="mut sm">${ADS.on?'Attivi':'Disattivati: durante i timeout il tabellone mostra i giocatori'}</div></div>
     <button class="${ADS.on?'ok':''}" data-a="adToggle">${ADS.on?'✓ Attivi':'Disattivati'}</button>
   </div>
   <div class="card row" style="justify-content:space-between">
@@ -794,7 +829,7 @@ function actsHTML(g,s){
   }else{
     h+=`<div class="ag fl"><button data-a="foul" data-f="C">C<small>tecnico all.</small></button><button data-a="foul" data-f="B">B<small>panchina</small></button><button data-a="foul" data-f="D">D<small>espulsione</small></button></div>`;
   }
-  h+=`<div class="lbar"><button data-a="undo" ${g.events.length?'':'disabled'}>↶ Annulla ultimo</button><button data-a="liveMenu">☰ Menu</button></div>`;
+  h+=`<div class="lbar"><button data-a="undo" ${g.events.length?'':'disabled'}>↶ Annulla ultimo</button><button data-a="ivOpen">⏱ Intervallo</button><button data-a="liveMenu">☰ Menu</button></div>`;
   h+=`<div class="log">${g.events.slice().reverse().slice(0,60).map(e=>`<div class="ev"><span class="tg t${e.team}"></span><span class="tm2">${perLabel(e.period)} ${fmtMS(e.clock)}</span><span class="tx">${evText(g,e)}</span><span class="tm2">${s.after[e.id]}</span><button data-a="delEv" data-id="${e.id}" title="Elimina">✕</button></div>`).join('')||'<div class="mut sm">Nessun evento</div>'}</div>`;
   return h;
 }
@@ -820,7 +855,7 @@ SCREENS.live=()=>{
     </div>
     ${teamHeader(g,s,1)}
   </header>
-  ${g.toTimer?toBannerHTML(g):''}
+  ${g.toTimer?toBannerHTML(g):''}${g.ivTimer?ivBannerHTML(g):''}
   <main class="pl">
     <section class="roster a">${rosterHTML(g,s,0)}</section>
     <section class="acts">${actsHTML(g,s)}</section>
@@ -1042,7 +1077,16 @@ const ACT={
     if(g.period>=4&&s.score[0]!==s.score[1]){ask('Terminare la gara?',`Risultato finale: <b>${esc(g.teams[0].name)} ${s.score[0]} – ${s.score[1]} ${esc(g.teams[1].name)}</b>`,'Fine gara',()=>{g.running=false;g.status='finished';g.endedAt=Date.now();save();view.sheetId=g.id;view.sheetFrom='live';go('sheet');});return;}
     const next=g.period+1;
     ask(`Chiudere il ${perLabel(g.period)}?`,(g.period>=4?'Punteggio in parità: si passa al <b>tempo supplementare</b>. ':'')+`Il cronometro verrà impostato a ${fmtMS(perLen(g,next))} per il ${perLabel(next)}.`+(g.clock>0?`<br><br><b>Attenzione:</b> restano ancora ${fmtClock(g.clock)} sul cronometro.`:''),`Vai al ${perLabel(next)}`,
-      ()=>{g.running=false;g.period=next;g.clock=perLen(g,next);save();render();});},
+      ()=>{g.running=false;g.period=next;g.clock=perLen(g,next);save();render();ivOpen(next===3?'half':'q');});},
+  ivOpen:()=>{const g=cur();ivOpen(g.events.length?(g.period===3&&g.clock>=perLen(g,3)?'half':'q'):'pre');},
+  ivStart:d=>{const g=cur();if(!g)return;const k=d.k,inp=document.getElementById('iv_'+k);let m=parseFloat(String(inp&&inp.value||'').replace(',','.'));
+    if(!(m>0)||m>99){toast('Minuti non validi',true);return;}
+    DB.intv=DB.intv||{};DB.intv[k]=m;const kd=IV_KINDS.find(x=>x[0]===k);
+    g.running=false;g.toTimer=null;g.ivTimer={k,name:kd[1],dur:m*60,end:Date.now()+m*60000,warn:!!kd[3]};
+    try{audio();}catch(e){}save();closeModal();render();bcast();toast(`${kd[1]}: ${fmtMS(m*60)}`);},
+  ivAdj:d=>{const g=cur();if(!g||!g.ivTimer)return;const t=g.ivTimer;t.end=Math.max(Date.now()+1000,t.end+ +d.d*1000);t.dur=Math.max(t.dur,(t.end-Date.now())/1000);
+    if(ivLeft(g)>180)t.w3=false;if(ivLeft(g)>90)t.w90=false;save();render();bcast();},
+  ivEnd:()=>{const g=cur();if(!g||!g.ivTimer)return;g.ivTimer=null;save();render();bcast();},
   liveMenu:()=>{const g=cur();openModal(`<h3>Menu gara</h3>
     <div style="display:grid;gap:8px">
       <button data-a="sheet" data-id="${g.id}">📄 Visualizza / stampa referto</button>
