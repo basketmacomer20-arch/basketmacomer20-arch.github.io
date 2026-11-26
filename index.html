@@ -146,6 +146,9 @@ table.ed td.c{text-align:center}
 .subask b{font-size:44px;line-height:1.1;letter-spacing:0} .subask small{font-size:13px;font-weight:500;letter-spacing:0;color:var(--mut)}
 .subask .in{background:rgba(34,197,94,.15);color:#86efac;border:2px solid rgba(34,197,94,.5)}
 .subask .out{background:rgba(239,68,68,.12);color:#fca5a5;border:2px solid rgba(239,68,68,.45)}
+.subrow{display:grid;grid-template-columns:1fr 52px;gap:6px}
+.editp{font-size:20px;padding:6px}
+.editp:disabled{opacity:.3}
 .addp{background:transparent;border:2px dashed var(--line);color:var(--mut);font-size:13px;padding:8px}
 .benchtag{font-size:11px;font-weight:900;background:#000;color:var(--warn);padding:2px 6px;border-radius:5px;margin-left:6px;letter-spacing:.05em}
 .mbox .big{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -570,7 +573,7 @@ function actsHTML(g,s){
     h+=`<div class="ag pts"><button data-a="pts" data-n="1" ${dis}>+1<small>tiro libero</small></button><button data-a="pts" data-n="2" ${dis}>+2<small>canestro</small></button><button data-a="pts" data-n="3" ${dis}>+3<small>da tre</small></button></div>
     <div class="ag fl f4"><button data-a="foul" data-f="P" ${dis}>P<small>personale</small></button><button data-a="foul" data-f="T" ${dis}>T<small>tecnico</small></button><button data-a="foul" data-f="U" ${dis}>U<small>antisport.</small></button><button data-a="foul" data-f="D" ${dis}>D<small>espulsione</small></button></div>`;
     const on=isP&&s.on[sel.t].has(sel.pi);
-    h+=`<button class="subbtn" data-a="sub" ${dis}>${isP?(on?'⇣ Esce dal campo':'⇡ Entra in campo'):'⇄ Entra / esce'}</button>`;
+    h+=`<div class="subrow"><button class="subbtn" data-a="sub" ${dis}>${isP?(on?'⇣ Esce dal campo':'⇡ Entra in campo'):'⇄ Entra / esce'}</button><button class="editp" data-a="editPOpen" ${isP?'':'disabled'} title="Correggi numero, nome, licenza">✎</button></div>`;
   }else{
     h+=`<div class="ag fl"><button data-a="foul" data-f="C">C<small>tecnico all.</small></button><button data-a="foul" data-f="B">B<small>panchina</small></button><button data-a="foul" data-f="D">D<small>espulsione</small></button></div>`;
   }
@@ -844,6 +847,20 @@ const ACT={
       <input id="apLic" placeholder="Licenza (facoltativa)" style="margin-top:6px">
       <div class="mbtns"><button class="ghost" data-a="closeModal">Annulla</button><button class="ok" data-a="addPManual" data-t="${ti}">Aggiungi</button></div>`);},
   addPAna:d=>{const t=cur().teams[+d.t];const ana=DB.teams.find(x=>x.name.trim().toLowerCase()===t.name.trim().toLowerCase());const p=ana&&ana.players[+d.k];if(p)addPlayerToGame(+d.t,p);},
+  editPOpen:()=>{const sel=view.sel;if(!sel||sel.pi<0)return;const p=cur().teams[sel.t].players[sel.pi];view.editP={t:sel.t,pi:sel.pi};
+    openModal(`<h3>Correggi giocatore</h3><div class="mut sm">Punti, falli e cambi già registrati restano a questo giocatore.</div>
+      <div style="display:grid;grid-template-columns:70px 1fr 1fr;gap:6px;margin-top:12px"><div><label>N°</label><input id="epNum" value="${esc(p.num)}" inputmode="numeric"></div><div><label>Cognome</label><input id="epLast" value="${esc(p.last)}"></div><div><label>Nome</label><input id="epFirst" value="${esc(p.first)}"></div></div>
+      <div style="margin-top:6px"><label>Licenza</label><input id="epLic" value="${esc(p.lic)}"></div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:15px;color:var(--txt)"><input type="checkbox" id="epCap" ${p.captain?'checked':''}> Capitano</label>
+      <div class="mbtns"><button class="ghost" data-a="closeModal">Annulla</button><button class="ok" data-a="editPSave">Salva</button></div>`);},
+  editPSave:()=>{const e=view.editP;if(!e)return;const t=cur().teams[e.t];const p=t.players[e.pi];
+    const num=$('#epNum').value.trim(),last=$('#epLast').value.trim();
+    if(!num){toast('Inserisci il numero di maglia',true);return;}
+    if(!last){toast('Inserisci il cognome',true);return;}
+    if(t.players.some((q,i)=>i!==e.pi&&String(q.num).trim()===num)){toast(`Il numero ${num} è già a referto`,true);return;}
+    const old=p.num;p.num=num;p.last=last;p.first=$('#epFirst').value.trim();p.lic=$('#epLic').value.trim();
+    if($('#epCap').checked)t.players.forEach((q,i)=>q.captain=i===e.pi);else p.captain=false;
+    view.editP=null;save();closeModal();render();toast(old!==num?`Numero corretto: ${old} → ${num}`:'Giocatore aggiornato');},
   addPManual:d=>addPlayerToGame(+d.t,{num:$('#apNum').value,last:$('#apLast').value,first:$('#apFirst').value,lic:$('#apLic').value}),
   perAdj:d=>{const g=cur();const p=Math.max(1,g.period+(+d.d));if(p===g.period)return;g.running=false;g.period=p;g.clock=perLen(g,p);save();closeModal();render();toast(`Periodo impostato: ${perLabel(p)}`);},
   forceEnd:()=>{const g=cur();ask('Terminare la gara ora?','La gara verrà segnata come terminata con il punteggio attuale.','Termina',()=>{g.running=false;g.status='finished';g.endedAt=Date.now();save();view.sheetId=g.id;view.sheetFrom='live';go('sheet');},true);},

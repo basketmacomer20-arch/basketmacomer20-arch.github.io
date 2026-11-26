@@ -1,6 +1,6 @@
 // Service worker: rende l'app disponibile offline.
 // Quando modifichi index.html, aumenta VERSION per forzare l'aggiornamento sui dispositivi.
-const VERSION = 'referto-v12';
+const VERSION = 'referto-v13';
 const FILES = [
   './',
   './index.html',
